@@ -184,8 +184,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Links
 
 - **Website**: [dontpoke.me/linkslinger](https://dontpoke.me/linkslinger)
-- **GitHub Repository**: [github.com/ForestSageSarah/linkclump](https://github.com/ForestSageSarah/linkclump)
-- **Issues**: [GitHub Issues](https://github.com/ForestSageSarah/linkclump/issues)
+- **GitHub Repository**: [github.com/DontPokeMe/linkslinger](https://github.com/DontPokeMe/linkslinger)
+- **Issues**: [GitHub Issues](https://github.com/DontPokeMe/linkslinger/issues)
 
 ---
 
