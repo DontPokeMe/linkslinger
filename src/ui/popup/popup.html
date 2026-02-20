@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="popup.css">
+  <title>LinkSlinger</title>
+</head>
+<body>
+  <div class="linkslinger-popup">
+    <!-- Header -->
+    <header class="popup-header">
+      <div class="header-left">
+        <img src="/assets/icons/icon-32.png" alt="LinkSlinger" class="header-icon">
+        <h2 class="header-title">LinkSlinger</h2>
+      </div>
+      <button class="header-settings" id="openSettings" aria-label="Settings">
+        <svg class="icon-cog" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M10 12.5C11.3807 12.5 12.5 11.3807 12.5 10C12.5 8.61929 11.3807 7.5 10 7.5C8.61929 7.5 7.5 8.61929 7.5 10C7.5 11.3807 8.61929 12.5 10 12.5Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M15.6066 12.8934L14.5 14L12.5 12L13.6066 10.8934M4.39338 7.10662L5.5 6L7.5 8L6.39338 9.10662M12.8934 4.39338L14 5.5L12 7.5L10.8934 6.39338M7.10662 15.6066L6 14.5L8 12.5L9.10662 13.6066" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    </header>
+
+    <!-- Body -->
+    <div class="popup-body">
+      <!-- Status Section -->
+      <div class="status-section">
+        <div class="status-indicator">
+          <span class="status-dot"></span>
+          <span class="status-text">Ready to select</span>
+        </div>
+        <p class="status-instruction">Hold <kbd>Shift</kbd> + Drag</p>
+      </div>
+
+      <hr class="divider">
+
+      <!-- Quick Settings -->
+      <div class="quick-settings">
+        <h3 class="section-title">Quick Settings</h3>
+        
+        <div class="setting-row">
+          <label for="smartSelect">Smart Select Mode</label>
+          <label class="toggle">
+            <input type="checkbox" id="smartSelect">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-row">
+          <label for="newWindow">Open in New Window</label>
+          <label class="toggle">
+            <input type="checkbox" id="newWindow">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="popup-footer">
+      <a href="https://dontpoke.me/linkslinger" target="_blank" class="footer-link">
+        Part of the dontpoke.me toolkit
+        <svg class="icon-external" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M10.5 1.5L1.5 10.5M10.5 1.5H6M10.5 1.5V6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </a>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
