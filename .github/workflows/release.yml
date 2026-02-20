@@ -26,8 +26,15 @@ jobs:
 
       - name: Verify manifest version matches tag
         run: |
-          MANIFEST_VERSION=$(grep -oP '"version":\s*"\K[^"]+' src/manifest.json)
+          # Use jq if available, otherwise use sed (more portable than grep -P)
+          if command -v jq &> /dev/null; then
+            MANIFEST_VERSION=$(jq -r '.version' src/manifest.json)
+          else
+            MANIFEST_VERSION=$(grep -o '"version":\s*"[^"]*"' src/manifest.json | sed 's/.*"version":\s*"\([^"]*\)".*/\1/')
+          fi
           TAG_VERSION="${{ steps.tag_version.outputs.version }}"
+          echo "Manifest version: $MANIFEST_VERSION"
+          echo "Tag version: $TAG_VERSION"
           if [ "$MANIFEST_VERSION" != "$TAG_VERSION" ]; then
             echo "Error: Manifest version ($MANIFEST_VERSION) does not match tag version ($TAG_VERSION)"
             exit 1

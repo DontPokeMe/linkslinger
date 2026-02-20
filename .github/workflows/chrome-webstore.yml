@@ -24,8 +24,12 @@ jobs:
             # Extract version from release tag name (e.g., v3.0.0 -> 3.0.0)
             VERSION=$(echo "${{ github.event.release.tag_name }}" | sed 's/^v//')
           else
-            # Fallback: read from manifest.json
-            VERSION=$(grep -oP '"version":\s*"\K[^"]+' src/manifest.json)
+            # Fallback: read from manifest.json (use sed instead of grep -P for portability)
+            if command -v jq &> /dev/null; then
+              VERSION=$(jq -r '.version' src/manifest.json)
+            else
+              VERSION=$(grep -o '"version":\s*"[^"]*"' src/manifest.json | sed 's/.*"version":\s*"\([^"]*\)".*/\1/')
+            fi
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Version: $VERSION"
