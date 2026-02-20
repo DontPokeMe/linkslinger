@@ -61,8 +61,8 @@ LinkSlinger enables rapid link management through an intuitive drag-selection me
 
 1. Clone this repository:
    ```bash
-   git clone https://github.com/ForestSageSarah/linkclump.git
-   cd linkclump
+   git clone https://github.com/DontPokeMe/linkslinger.git
+   cd linkslinger
    ```
 
 2. Open Chrome and navigate to `chrome://extensions/`
