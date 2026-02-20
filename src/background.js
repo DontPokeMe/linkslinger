@@ -403,11 +403,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     });
 
     // Open options page for new user
-    const optionsUrl = chrome.runtime.getURL("pages/options.html?init=true");
+    const optionsUrl = chrome.runtime.getURL("ui/options/options.html?init=true");
     chrome.windows.create({
       url: optionsUrl,
-      width: 800,
-      height: 850
+      width: 900,
+      height: 700
     });
   } else if (!await settingsManager.isLatest()) {
     console.log("Settings version mismatch, performing update...");

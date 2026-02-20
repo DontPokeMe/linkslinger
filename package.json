@@ -1,14 +1,15 @@
 {
-  "name": "linkclump",
-  "description": "Chrome extension",
+  "name": "linkslinger",
+  "description": "LinkSlinger Chrome Extension - Select, open, copy, or bookmark multiple links at once",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/benblack86/linkclump.git"
+    "url": "git+https://github.com/ForestSageSarah/linkclump.git"
   },
   "bugs": {
-    "url": "https://github.com/benblack86/linkclump/issues"
+    "url": "https://github.com/ForestSageSarah/linkclump/issues"
   },
-  "homepage": "https://github.com/benblack86/linkclump#readme",
+  "homepage": "https://github.com/ForestSageSarah/linkclump#readme",
+  "version": "3.0.0",
   "devDependencies": {
     "eslint": "^6.7.1"
   }
