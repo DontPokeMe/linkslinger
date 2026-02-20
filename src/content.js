@@ -139,6 +139,18 @@ function mousedown(event) {
   
   console.log("LinkSlinger: mousedown - mouse_button:", mouse_button, "key_pressed:", key_pressed, "current_key:", current_key);
   
+  // CRITICAL: Don't activate in input fields (per Midori's guide Section 2.3)
+  var target = event.target;
+  var isInputField = target.tagName === 'INPUT' || 
+                     target.tagName === 'TEXTAREA' || 
+                     target.isContentEditable ||
+                     (target.closest && target.closest('input, textarea, [contenteditable="true"]'));
+  
+  if (isInputField) {
+    console.log("LinkSlinger: Ignoring mousedown in input field");
+    return;
+  }
+  
   // Temporarily set key_pressed for allow_selection check
   var saved_key_pressed = key_pressed;
   key_pressed = current_key;
@@ -545,6 +557,19 @@ function allow_key(keyCode) {
 }
 
 function keydown(event) {
+  // CRITICAL: Don't activate when typing in input fields (per Midori's guide Section 2.3)
+  var target = event.target;
+  var isInputField = target.tagName === 'INPUT' || 
+                     target.tagName === 'TEXTAREA' || 
+                     target.isContentEditable ||
+                     (target.closest && target.closest('input, textarea, [contenteditable="true"]'));
+  
+  if (isInputField) {
+    // Still allow key tracking for input fields, but don't activate selection
+    // This prevents interference with normal typing
+    return;
+  }
+  
   if (event.keyCode !== END_KEYCODE && event.keyCode !== HOME_KEYCODE) {
     key_pressed = event.keyCode;
     // Debug: log key press for troubleshooting
@@ -563,6 +588,17 @@ function blur() {
 }
 
 function keyup(event) {
+  // CRITICAL: Don't process keyup in input fields (per Midori's guide Section 2.3)
+  var target = event.target;
+  var isInputField = target.tagName === 'INPUT' || 
+                     target.tagName === 'TEXTAREA' || 
+                     target.isContentEditable ||
+                     (target.closest && target.closest('input, textarea, [contenteditable="true"]'));
+  
+  if (isInputField) {
+    return; // Don't interfere with normal typing
+  }
+  
   if (event.keyCode !== END_KEYCODE && event.keyCode !== HOME_KEYCODE) {
     remove_key();
   }

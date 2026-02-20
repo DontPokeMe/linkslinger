@@ -190,12 +190,46 @@ function openTab(urls, delay, windowId, openerTabId, tabPosition, closeTime) {
   }
 }
 
-// Use the Navigator Clipboard API in the service worker
-function copyToClipboard(text) {
-  // Requires "clipboardWrite" permission in manifest.json
-  navigator.clipboard.writeText(text).catch(err => {
-    console.error("Failed to copy text:", err);
-  });
+/**
+ * Copy to Clipboard using Offscreen Document Pattern
+ * 
+ * Per Midori's Migration Guide Section 2.4:
+ * Service workers cannot access navigator.clipboard directly.
+ * We use an offscreen document to provide DOM context for clipboard operations.
+ */
+async function copyToClipboard(text) {
+  try {
+    // Check if offscreen document already exists
+    const clients = await chrome.offscreen.hasDocument();
+    
+    if (!clients) {
+      // Create offscreen document for clipboard operations
+      await chrome.offscreen.createDocument({
+        url: 'offscreen.html',
+        reasons: ['CLIPBOARD'],
+        justification: 'Copy links to clipboard for LinkSlinger extension'
+      });
+    }
+
+    // Send message to offscreen document to perform clipboard operation
+    const response = await chrome.runtime.sendMessage({
+      target: 'offscreen',
+      type: 'copy-to-clipboard',
+      text: text
+    });
+
+    if (!response || !response.success) {
+      console.error('LinkSlinger: Clipboard operation failed:', response?.error);
+    }
+  } catch (error) {
+    console.error('LinkSlinger: Failed to copy to clipboard:', error);
+    // Fallback: Try direct clipboard API (may work in some contexts)
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (fallbackError) {
+      console.error('LinkSlinger: Fallback clipboard also failed:', fallbackError);
+    }
+  }
 }
 
 function pad(number, length) {
@@ -338,11 +372,11 @@ async function handleRequests(request, sender, sendResponse) {
       break;
 
     case "init":
-      // Return the loaded settings
+      // Return the loaded settings (synchronous callback for compatibility)
       if (sendResponse) {
         sendResponse(currentSettings);
       }
-      return currentSettings; // Also return for promise handling
+      return currentSettings;
 
     case "update":
       // Save new settings, then broadcast them to all tabs
@@ -378,19 +412,19 @@ async function broadcastUpdatedSettings() {
 }
 
 // In MV3, use chrome.runtime.onMessage
+// Note: In MV3, sendResponse must be called synchronously or return true to keep channel open
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   // handleRequests is async, so we need to handle it properly
   if (request.message === "init") {
-    // For init messages, we need to send a response
-    handleRequests(request, sender, sendResponse).then((result) => {
-      // If sendResponse wasn't called in handleRequests, call it here
-      if (result && typeof sendResponse === 'function') {
-        sendResponse(result);
-      }
-    }).catch((error) => {
+    // For init messages, we need to send a response asynchronously
+    handleRequests(request, sender, sendResponse).catch((error) => {
       console.error("Error handling init request:", error);
       if (typeof sendResponse === 'function') {
-        sendResponse({ error: error.message });
+        try {
+          sendResponse({ error: error.message });
+        } catch (e) {
+          // Response already sent or channel closed - this is normal
+        }
       }
     });
     return true; // Keep channel open for async response
