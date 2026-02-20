@@ -45,13 +45,12 @@ async function loadSettings() {
         // Set activation key based on keyCode
         const activationKeySelect = document.getElementById('activationKey');
         if (activationKeySelect) {
-          // Map keyCodes: Shift=16, Ctrl=17, Alt=18
-          if (action.key === 16) {
-            activationKeySelect.value = 'shift';
-          } else if (action.key === 17) {
-            activationKeySelect.value = 'ctrl';
-          } else if (action.key === 18) {
-            activationKeySelect.value = 'alt';
+          // Only Z key supported for now (keyCode 90)
+          if (action.key === 90) {
+            activationKeySelect.value = 'z';
+          } else {
+            // Default to Z if key doesn't match
+            activationKeySelect.value = 'z';
           }
         }
         
@@ -119,14 +118,8 @@ async function saveGeneralSettings() {
     const smartSelect = document.getElementById('smartSelect').checked;
     
     // Map activation key to keyCode
-    let keyCode = 90; // Default to 'z' key
-    if (activationKey === 'shift') {
-      keyCode = 16;
-    } else if (activationKey === 'ctrl') {
-      keyCode = 17;
-    } else if (activationKey === 'alt') {
-      keyCode = 18;
-    }
+    // Only Z key supported for now
+    let keyCode = 90; // Z key
     
     // Update first action (or create if doesn't exist)
     const firstActionId = Object.keys(settings.actions)[0] || '101';
