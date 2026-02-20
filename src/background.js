@@ -244,7 +244,7 @@ function formatLink({ url, title }, copyFormat) {
   }
 }
 
-async function handleRequests(request, sender, callback) {
+async function handleRequests(request, sender, sendResponse) {
   // We want to load the settings before responding, to ensure we have the latest
   let currentSettings = await settingsManager.load();
 
@@ -339,10 +339,10 @@ async function handleRequests(request, sender, callback) {
 
     case "init":
       // Return the loaded settings
-      if (callback) {
-        callback(currentSettings);
+      if (sendResponse) {
+        sendResponse(currentSettings);
       }
-      break;
+      return currentSettings; // Also return for promise handling
 
     case "update":
       // Save new settings, then broadcast them to all tabs
@@ -358,9 +358,19 @@ async function broadcastUpdatedSettings() {
   chrome.windows.getAll({ populate: true }, (windowList) => {
     windowList.forEach((win) => {
       win.tabs.forEach((tab) => {
+        // Skip non-http(s) URLs (chrome://, extension://, etc.)
+        if (!tab.url || !/^https?:\/\//.test(tab.url)) return;
+        
+        // Skip chrome:// and extension:// pages
+        if (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) return;
+        
         chrome.tabs.sendMessage(tab.id, {
           message: "update",
           settings: newSettings
+        }).catch((error) => {
+          // Silently ignore errors for tabs without content script listeners
+          // This is normal for tabs that don't have the extension's content script loaded
+          // or tabs that have been closed/reloaded
         });
       });
     });
@@ -372,13 +382,23 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   // handleRequests is async, so we need to handle it properly
   if (request.message === "init") {
     // For init messages, we need to send a response
-    handleRequests(request, sender, sendResponse).then(() => {
-      // Response sent in handleRequests via callback
+    handleRequests(request, sender, sendResponse).then((result) => {
+      // If sendResponse wasn't called in handleRequests, call it here
+      if (result && typeof sendResponse === 'function') {
+        sendResponse(result);
+      }
+    }).catch((error) => {
+      console.error("Error handling init request:", error);
+      if (typeof sendResponse === 'function') {
+        sendResponse({ error: error.message });
+      }
     });
     return true; // Keep channel open for async response
   } else {
     // For other messages, no response needed
-    handleRequests(request, sender, sendResponse);
+    handleRequests(request, sender, sendResponse).catch((error) => {
+      console.error("Error handling request:", error);
+    });
     return false;
   }
 });
