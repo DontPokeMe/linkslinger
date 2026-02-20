@@ -1,28 +1,60 @@
+# IDE and Editor files
 .settings/
 .project
-.DS_Store
-.idea
+.idea/
 *.iml
-node_modules/
-*.zip
+.vscode/
+*.swp
+*.swo
+*~
 
-# Build artifacts
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Dependencies
+node_modules/
+package-lock.json
+
+# Build artifacts and releases
 build/
 release/
 dist/
+*.zip
+*.crx
+*.pem
 
-# Environment files
+# Environment and secrets
 .env
 .env.local
+.env.*.local
+*.key
+*.pem
+secrets.json
+credentials.json
 
 # Logs
 *.log
 npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# IDE
-.vscode/
-.idea/
+# Test coverage
+coverage/
+.nyc_output/
 
-# OS
-Thumbs.db
-.DS_Store
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Old build system (replaced by GitHub Actions)
+build.xml
+
+# Old test framework (not used)
+jtd/
+
+# Media files (old marketing materials, if not needed)
+# Uncomment if media/ should be excluded:
+# media/
