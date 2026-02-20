@@ -390,13 +390,23 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     await settingsManager.init();
 
     // Inject content.js into all current windows/tabs
+    // Note: Content scripts are auto-injected via manifest.json, but we inject into existing tabs on install/update
     chrome.windows.getAll({ populate: true }, (windows) => {
       windows.forEach((win) => {
         win.tabs.forEach((tab) => {
-          if (!/^https?:\/\//.test(tab.url)) return;
+          // Skip non-http(s) URLs (chrome://, extension://, etc.)
+          if (!tab.url || !/^https?:\/\//.test(tab.url)) return;
+          
+          // Skip chrome:// and extension:// pages
+          if (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) return;
+          
           chrome.scripting.executeScript({
             target: { tabId: tab.id },
             files: ["content.js"]
+          }).catch((error) => {
+            // Silently ignore errors for tabs we can't access (chrome:// pages, etc.)
+            // Content scripts will be injected automatically for new tabs via manifest.json
+            console.log(`Could not inject into tab ${tab.id}: ${error.message}`);
           });
         });
       });

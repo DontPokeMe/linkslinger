@@ -65,11 +65,21 @@ chrome.runtime.sendMessage({
   }
 
   if (allowed && settings) {
+    // Debug: log settings to verify they loaded
+    console.log("LinkSlinger: Settings loaded", settings);
+    console.log("LinkSlinger: Default key should be 90 (Z)");
+    
     window.addEventListener("mousedown", mousedown, true);
     window.addEventListener("keydown", keydown, true);
     window.addEventListener("keyup", keyup, true);
     window.addEventListener("blur", blur, true);
     window.addEventListener("contextmenu", contextmenu, true);
+    
+    // Also listen on document for better key capture (capture phase)
+    document.addEventListener("keydown", keydown, true);
+    document.addEventListener("keyup", keyup, true);
+  } else {
+    console.log("LinkSlinger: Not initialized - allowed:", allowed, "settings:", settings);
   }
 });
 
@@ -122,6 +132,16 @@ function clean_up() {
 
 function mousedown(event) {
   mouse_button = event.button;
+
+  // Use key_pressed tracked from keydown events
+  // Focus on Z key (90) for now
+  var current_key = key_pressed;
+  
+  console.log("LinkSlinger: mousedown - mouse_button:", mouse_button, "key_pressed:", key_pressed, "current_key:", current_key);
+  
+  // Temporarily set key_pressed for allow_selection check
+  var saved_key_pressed = key_pressed;
+  key_pressed = current_key;
 
   // turn on menu for windows
   if (os === OS_WIN) {
@@ -177,6 +197,9 @@ function mousedown(event) {
       window.addEventListener("mousewheel", mousewheel, true);
       window.addEventListener("mouseout", mouseout, true);
     }
+  } else {
+    // Restore key_pressed if selection not allowed
+    key_pressed = saved_key_pressed;
   }
 }
 
@@ -524,6 +547,8 @@ function allow_key(keyCode) {
 function keydown(event) {
   if (event.keyCode !== END_KEYCODE && event.keyCode !== HOME_KEYCODE) {
     key_pressed = event.keyCode;
+    // Debug: log key press for troubleshooting
+    console.log("LinkSlinger: Key pressed:", event.keyCode, "Key:", event.key, "key_pressed set to:", key_pressed);
     // turn menu off for linux
     if (os === OS_LINUX && allow_key(key_pressed)) {
       stop_menu = true;
@@ -552,14 +577,28 @@ function remove_key() {
 }
 
 function allow_selection() {
+  if (!settings) {
+    console.log("LinkSlinger: allow_selection - no settings");
+    return false;
+  }
+  
   for (var i in settings) {
-    // need to check if key is 0 as key_pressed might not be accurate
-    if (settings[i].mouse === mouse_button && settings[i].key === key_pressed) {
+    // Check if mouse button matches (0 = left button)
+    if (settings[i].mouse !== mouse_button) {
+      continue;
+    }
+    
+    // Check if key matches - expecting 90 (Z key)
+    console.log("LinkSlinger: Checking - mouse:", mouse_button, "key_pressed:", key_pressed, "setting key:", settings[i].key);
+    if (settings[i].key === key_pressed) {
       setting = i;
+      console.log("LinkSlinger: ✓ Selection allowed - mouse:", mouse_button, "key:", key_pressed, "setting:", i);
       // Border color is now handled by CSS class
       return true;
     }
   }
+  
+  console.log("LinkSlinger: ✗ Selection not allowed - mouse:", mouse_button, "key_pressed:", key_pressed, "settings:", settings);
   return false;
 }
 
