@@ -1,0 +1,99 @@
+name: Release Extension
+
+on:
+  push:
+    tags:
+      - 'v*'  # Triggers on tags like v3.0.0, v3.1.0, etc.
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: write  # Needed to create releases
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Get version from tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Version: ${VERSION}"
+      
+      - name: Verify manifest version matches tag
+        run: |
+          MANIFEST_VERSION=$(jq -r '.version' manifest.json)
+          TAG_VERSION="${{ steps.version.outputs.version }}"
+          
+          if [ "$MANIFEST_VERSION" != "$TAG_VERSION" ]; then
+            echo "Error: manifest.json version ($MANIFEST_VERSION) doesn't match tag ($TAG_VERSION)"
+            exit 1
+          fi
+          
+          echo "Version match verified ✓"
+      
+      - name: Build extension for release
+        run: |
+          # Create release directory
+          mkdir -p release
+          
+          # Copy extension files (production only)
+          rsync -av --progress . release/ \
+            --exclude .git \
+            --exclude .github \
+            --exclude node_modules \
+            --exclude release \
+            --exclude build \
+            --exclude .gitignore \
+            --exclude README.md \
+            --exclude package.json \
+            --exclude package-lock.json \
+            --exclude .vscode \
+            --exclude .DS_Store
+          
+          # Create release zip
+          cd release
+          zip -r ../linkslinger-v${{ steps.version.outputs.version }}.zip .
+          cd ..
+          
+          # Verify zip was created
+          ls -lh linkslinger-v${{ steps.version.outputs.version }}.zip
+      
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Get commits since last tag
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          
+          if [ -z "$PREVIOUS_TAG" ]; then
+            CHANGELOG="Initial release"
+          else
+            CHANGELOG=$(git log ${PREVIOUS_TAG}..HEAD --pretty=format:"- %s" --no-merges)
+          fi
+          
+          # Save to file for release notes
+          echo "$CHANGELOG" > CHANGELOG.txt
+          
+          echo "Changelog generated ✓"
+      
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: LinkSlinger v${{ steps.version.outputs.version }}
+          body_path: CHANGELOG.txt
+          files: |
+            linkslinger-v${{ steps.version.outputs.version }}.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Upload to artifacts (backup)
+        uses: actions/upload-artifact@v3
+        with:
+          name: linkslinger-v${{ steps.version.outputs.version }}
+          path: linkslinger-v${{ steps.version.outputs.version }}.zip
+          retention-days: 90
