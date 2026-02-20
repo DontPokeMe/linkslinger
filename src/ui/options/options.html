@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="options.css">
+  <title>LinkSlinger Settings</title>
+</head>
+<body>
+  <div class="options-container">
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <img src="/assets/icons/icon-48.png" alt="LinkSlinger">
+        <h1>LinkSlinger</h1>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="#general" class="nav-item active" data-section="general">General</a>
+        <a href="#hotkeys" class="nav-item" data-section="hotkeys">Hotkeys</a>
+        <a href="#advanced" class="nav-item" data-section="advanced">Advanced</a>
+        <a href="#about" class="nav-item" data-section="about">About</a>
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <section id="general" class="settings-section active">
+        <h2 class="section-heading">General Settings</h2>
+
+        <!-- Setting Card -->
+        <div class="settings-card">
+          <div class="setting-group">
+            <label for="activationKey" class="setting-label">
+              Selection Activation Key
+            </label>
+            <p class="setting-description">
+              Hold this key while dragging to select links
+            </p>
+            <select id="activationKey" class="setting-input">
+              <option value="shift">Shift</option>
+              <option value="ctrl">Ctrl / Cmd</option>
+              <option value="alt">Alt</option>
+            </select>
+          </div>
+
+          <div class="setting-group">
+            <label class="setting-label">Default Action</label>
+            <p class="setting-description">
+              What happens when you release the selection
+            </p>
+            <div class="radio-group">
+              <label class="radio-option">
+                <input type="radio" name="defaultAction" value="tabs" checked>
+                <span>Open in new tabs</span>
+              </label>
+              <label class="radio-option">
+                <input type="radio" name="defaultAction" value="window">
+                <span>Open in new window</span>
+              </label>
+              <label class="radio-option">
+                <input type="radio" name="defaultAction" value="copy">
+                <span>Copy to clipboard</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="setting-group">
+            <label class="setting-label">
+              <input type="checkbox" id="smartSelect">
+              Enable Smart Selection
+            </label>
+            <p class="setting-description">
+              Automatically filter out non-relevant links
+            </p>
+          </div>
+
+          <button id="saveSettings" class="btn-primary">Save Settings</button>
+        </div>
+      </section>
+
+      <section id="hotkeys" class="settings-section">
+        <h2 class="section-heading">Hotkeys</h2>
+        <div class="settings-card">
+          <p class="setting-description">Configure keyboard shortcuts for link selection.</p>
+          <p class="setting-description" style="margin-top: 16px; color: var(--text-secondary);">
+            Hotkey configuration coming soon. For now, use Shift + Drag to select links.
+          </p>
+        </div>
+      </section>
+
+      <section id="advanced" class="settings-section">
+        <h2 class="section-heading">Advanced Settings</h2>
+        <div class="settings-card">
+          <div class="setting-group">
+            <label for="blocklist" class="setting-label">Blocklist</label>
+            <p class="setting-description">
+              URLs to exclude from selection (one per line)
+            </p>
+            <textarea id="blocklist" class="setting-textarea" rows="6" placeholder="example.com&#10;another-site.com"></textarea>
+          </div>
+          <button id="saveAdvanced" class="btn-primary">Save Advanced Settings</button>
+        </div>
+      </section>
+
+      <section id="about" class="settings-section">
+        <h2 class="section-heading">About LinkSlinger</h2>
+        <div class="settings-card">
+          <p class="about-text">
+            LinkSlinger is part of the dontpoke.me OSINT toolkit.
+            Open source, privacy-focused, built by security researchers.
+          </p>
+          <div class="about-links">
+            <a href="https://dontpoke.me/linkslinger" target="_blank" class="link-button">
+              Visit Website
+            </a>
+            <a href="https://github.com/ForestSageSarah/linkclump" target="_blank" class="link-button">
+              View on GitHub
+            </a>
+          </div>
+          <p class="version-info">Version 3.0.0</p>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>

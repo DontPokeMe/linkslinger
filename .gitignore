@@ -1,0 +1,28 @@
+.settings/
+.project
+.DS_Store
+.idea
+*.iml
+node_modules/
+*.zip
+
+# Build artifacts
+build/
+release/
+dist/
+
+# Environment files
+.env
+.env.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+.DS_Store

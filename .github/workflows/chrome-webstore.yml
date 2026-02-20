@@ -1,0 +1,69 @@
+name: Publish to Chrome Web Store
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    if: github.event.release.draft == false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download release artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: linkslinger-extension
+          path: ./release
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install chrome-webstore-upload-cli
+        run: npm install -g chrome-webstore-upload-cli
+
+      - name: Publish to Chrome Web Store
+        env:
+          EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID }}
+          CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CHROME_CLIENT_SECRET }}
+          REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN }}
+        run: |
+          if [ -z "$EXTENSION_ID" ] || [ -z "$CLIENT_ID" ] || [ -z "$CLIENT_SECRET" ] || [ -z "$REFRESH_TOKEN" ]; then
+            echo "⚠️  Chrome Web Store secrets not configured. Skipping auto-publish."
+            echo "To enable auto-publish, add the following secrets to GitHub:"
+            echo "  - CHROME_EXTENSION_ID"
+            echo "  - CHROME_CLIENT_ID"
+            echo "  - CHROME_CLIENT_SECRET"
+            echo "  - CHROME_REFRESH_TOKEN"
+            exit 0
+          fi
+
+          # Find the zip file
+          ZIP_FILE=$(find ./release -name "*.zip" | head -n 1)
+          
+          if [ -z "$ZIP_FILE" ]; then
+            echo "❌ No zip file found in release artifacts"
+            exit 1
+          fi
+
+          echo "📦 Uploading $ZIP_FILE to Chrome Web Store..."
+          
+          chrome-webstore-upload upload \
+            --source "$ZIP_FILE" \
+            --extension-id "$EXTENSION_ID" \
+            --client-id "$CLIENT_ID" \
+            --client-secret "$CLIENT_SECRET" \
+            --refresh-token "$REFRESH_TOKEN" \
+            --auto-publish || {
+              echo "⚠️  Upload failed. You may need to publish manually from Chrome Web Store Developer Dashboard."
+              exit 0
+            }
+
+          echo "✅ Successfully published to Chrome Web Store!"
