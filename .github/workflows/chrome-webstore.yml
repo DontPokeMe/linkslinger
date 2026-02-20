@@ -47,6 +47,12 @@ jobs:
           VERSION="${{ steps.tag_version.outputs.version }}"
           echo "Building extension v${VERSION}..."
           
+          # Verify src directory exists
+          if [ ! -d "src" ]; then
+            echo "Error: src directory not found"
+            exit 1
+          fi
+          
           mkdir -p build
           rsync -av \
             --exclude .git \
@@ -63,11 +69,38 @@ jobs:
             --exclude '*.log' \
             --exclude .env \
             --exclude '*.zip' \
-            src/ build/
+            src/ build/ || {
+              echo "Warning: rsync completed with errors, but continuing..."
+            }
+          
+          # Verify manifest.json was copied
+          if [ ! -f "build/manifest.json" ]; then
+            echo "Error: manifest.json not found in build directory"
+            exit 1
+          fi
           
           cd build
-          zip -r ../linkslinger-v${VERSION}.zip .
+          # Verify we have required files
+          if [ ! -f "content.js" ]; then
+            echo "Error: content.js missing"
+            exit 1
+          fi
+          if [ ! -f "background.js" ]; then
+            echo "Error: background.js missing"
+            exit 1
+          fi
+          
+          zip -r ../linkslinger-v${VERSION}.zip . || {
+            echo "Error: zip creation failed"
+            exit 1
+          }
           cd ..
+          
+          # Verify zip was created
+          if [ ! -f "linkslinger-v${VERSION}.zip" ]; then
+            echo "Error: zip file not created"
+            exit 1
+          fi
           
           echo "✅ Extension built: linkslinger-v${VERSION}.zip"
 

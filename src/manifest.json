@@ -13,25 +13,18 @@
       "128": "assets/icons/icon-128.png"
     }
   },
-
-  // Background service worker replaces persistent background scripts from V2
   "background": {
     "service_worker": "background.js"
   },
-
-  // Options page is declared under "options_ui" in MV3
   "options_ui": {
     "page": "ui/options/options.html",
     "open_in_tab": true
   },
-
   "icons": {
     "16": "assets/icons/icon-16.png",
     "48": "assets/icons/icon-48.png",
     "128": "assets/icons/icon-128.png"
   },
-
-  // Content scripts remain similar; note that "all_frames" and "run_at" are still allowed in MV3
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
@@ -41,22 +34,16 @@
       "all_frames": true
     }
   ],
-
-  // The old "permissions" array is split into "permissions" and "host_permissions" in MV3
-  // - "permissions" are for Chrome APIs (like "bookmarks")
-  // - "host_permissions" define which sites content scripts can access
   "permissions": [
-  "tabs",
-  "bookmarks",
-  "storage",
-  "scripting",
-  "clipboardWrite"
+    "tabs",
+    "bookmarks",
+    "storage",
+    "scripting",
+    "clipboardWrite"
   ],
   "host_permissions": [
     "<all_urls>"
   ],
-
-  // In Manifest V3, web-accessible resources must be declared with the specific "matches" they apply to.
   "web_accessible_resources": [
     {
       "resources": ["assets/fonts/*", "pages/test_area.html"],

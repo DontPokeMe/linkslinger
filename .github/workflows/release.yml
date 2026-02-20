@@ -46,6 +46,13 @@ jobs:
 
       - name: Copy extension files
         run: |
+          # Verify src directory exists
+          if [ ! -d "src" ]; then
+            echo "Error: src directory not found"
+            exit 1
+          fi
+          
+          # Copy files with rsync (continue even if some files are missing)
           rsync -av \
             --exclude .git \
             --exclude .github \
@@ -61,13 +68,48 @@ jobs:
             --exclude '*.log' \
             --exclude .env \
             --exclude '*.zip' \
-            src/ build/
+            src/ build/ || {
+              echo "Warning: rsync completed with errors, but continuing..."
+            }
+          
+          # Verify manifest.json was copied
+          if [ ! -f "build/manifest.json" ]; then
+            echo "Error: manifest.json not found in build directory"
+            exit 1
+          fi
+          
+          echo "✓ Files copied successfully"
 
       - name: Create zip archive
         run: |
           cd build
-          zip -r ../linkslinger-v${{ steps.tag_version.outputs.version }}.zip .
+          # Verify we have required files
+          if [ ! -f "manifest.json" ]; then
+            echo "Error: manifest.json missing"
+            exit 1
+          fi
+          if [ ! -f "content.js" ]; then
+            echo "Error: content.js missing"
+            exit 1
+          fi
+          if [ ! -f "background.js" ]; then
+            echo "Error: background.js missing"
+            exit 1
+          fi
+          
+          zip -r ../linkslinger-v${{ steps.tag_version.outputs.version }}.zip . || {
+            echo "Error: zip creation failed"
+            exit 1
+          }
           cd ..
+          
+          # Verify zip was created
+          if [ ! -f "linkslinger-v${{ steps.tag_version.outputs.version }}.zip" ]; then
+            echo "Error: zip file not created"
+            exit 1
+          fi
+          
+          echo "✓ Zip archive created successfully"
 
       - name: Generate release notes
         id: release_notes
