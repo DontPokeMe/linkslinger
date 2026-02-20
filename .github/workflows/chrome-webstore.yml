@@ -9,16 +9,26 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     if: github.event.release.draft == false
+    permissions:
+      contents: read
+      releases: read
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Download release artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: linkslinger-extension
-          path: ./release
+      - name: Extract version from release tag
+        id: tag_version
+        run: |
+          if [ "${{ github.event.release.tag_name }}" != "" ]; then
+            # Extract version from release tag name (e.g., v3.0.0 -> 3.0.0)
+            VERSION=$(echo "${{ github.event.release.tag_name }}" | sed 's/^v//')
+          else
+            # Fallback: read from manifest.json
+            VERSION=$(grep -oP '"version":\s*"\K[^"]+' src/manifest.json)
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -27,6 +37,47 @@ jobs:
 
       - name: Install chrome-webstore-upload-cli
         run: npm install -g chrome-webstore-upload-cli
+
+      - name: Build extension package
+        run: |
+          VERSION="${{ steps.tag_version.outputs.version }}"
+          echo "Building extension v${VERSION}..."
+          
+          mkdir -p build
+          rsync -av \
+            --exclude .git \
+            --exclude .github \
+            --exclude node_modules \
+            --exclude build \
+            --exclude release \
+            --exclude .gitignore \
+            --exclude README.md \
+            --exclude package.json \
+            --exclude package-lock.json \
+            --exclude .vscode \
+            --exclude .DS_Store \
+            --exclude '*.log' \
+            --exclude .env \
+            --exclude '*.zip' \
+            src/ build/
+          
+          cd build
+          zip -r ../linkslinger-v${VERSION}.zip .
+          cd ..
+          
+          echo "✅ Extension built: linkslinger-v${VERSION}.zip"
+
+      - name: Find zip file
+        id: find_zip
+        run: |
+          ZIP_FILE=$(find . -maxdepth 1 -name "linkslinger-v*.zip" -type f | head -n 1)
+          if [ -z "$ZIP_FILE" ]; then
+            echo "❌ No zip file found"
+            exit 1
+          fi
+          echo "file=$ZIP_FILE" >> $GITHUB_OUTPUT
+          echo "Found zip file: $ZIP_FILE"
+          ls -lh "$ZIP_FILE"
 
       - name: Publish to Chrome Web Store
         env:
@@ -45,14 +96,7 @@ jobs:
             exit 0
           fi
 
-          # Find the zip file
-          ZIP_FILE=$(find ./release -name "*.zip" | head -n 1)
-          
-          if [ -z "$ZIP_FILE" ]; then
-            echo "❌ No zip file found in release artifacts"
-            exit 1
-          fi
-
+          ZIP_FILE="${{ steps.find_zip.outputs.file }}"
           echo "📦 Uploading $ZIP_FILE to Chrome Web Store..."
           
           chrome-webstore-upload upload \
