@@ -151,13 +151,12 @@ function resolveActiveActionId(mouseButton, e) {
       if (p?.trigger && triggerSigContent(p.trigger) === sig && settings.actions?.[p.actionId]) return p.actionId;
     }
   }
+  // Also match modifier profiles when no modifier is held (mods:0000) so left-drag works when key never reached the page
   var mods = { shift: !!e.shiftKey, alt: !!e.altKey, ctrl: !!e.ctrlKey, meta: !!e.metaKey };
-  if (mods.shift || mods.alt || mods.ctrl || mods.meta) {
-    var modSig = "mods:" + (+mods.shift) + (+mods.alt) + (+mods.ctrl) + (+mods.meta) + "|btn:" + mouseButton;
-    for (var j = 0; j < profiles.length; j++) {
-      var q = profiles[j];
-      if (q?.trigger && triggerSigContent(q.trigger) === modSig && settings.actions?.[q.actionId]) return q.actionId;
-    }
+  var modSig = "mods:" + (+mods.shift) + (+mods.alt) + (+mods.ctrl) + (+mods.meta) + "|btn:" + mouseButton;
+  for (var j = 0; j < profiles.length; j++) {
+    var q = profiles[j];
+    if (q?.trigger && triggerSigContent(q.trigger) === modSig && settings.actions?.[q.actionId]) return q.actionId;
   }
   return null;
 }

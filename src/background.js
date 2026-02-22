@@ -132,6 +132,18 @@ class SettingsManager {
           return true;
         });
 
+      // Ensure "no key" fallback exists so left-drag works when key events never reach the page
+      const noKeySig = "mods:0000|btn:0";
+      if (!seen.has(noKeySig)) {
+        out.profiles.push({
+          id: "p0-no-key",
+          name: "Default (no key)",
+          trigger: { kind: "mods", key: "", mods: { shift: false, alt: false, ctrl: false, meta: false }, mouseButton: 0 },
+          actionId: firstActionId
+        });
+        seen.add(noKeySig);
+      }
+
       if (out.profiles.length === 0) {
         out.profiles = [
           {
@@ -264,9 +276,10 @@ class SettingsManager {
       profiles: [
         { id: "p1", name: "Default", trigger: { kind: "key", key: "z", mods: { shift: false, alt: false, ctrl: false, meta: false }, mouseButton: 0 }, actionId: "101" },
         { id: "p2", name: "Default (Shift)", trigger: { kind: "mods", key: "", mods: { shift: true, alt: false, ctrl: false, meta: false }, mouseButton: 0 }, actionId: "101" },
-        { id: "p3", name: "Copy", trigger: { kind: "mods", key: "", mods: { shift: false, alt: true, ctrl: false, meta: false }, mouseButton: 0 }, actionId: "102" },
-        { id: "p4", name: "Export", trigger: { kind: "mods", key: "", mods: { shift: false, alt: false, ctrl: false, meta: true }, mouseButton: 0 }, actionId: "103" },
-        { id: "p5", name: "Bookmark", trigger: { kind: "mods", key: "", mods: { shift: false, alt: false, ctrl: true, meta: false }, mouseButton: 0 }, actionId: "104" }
+        { id: "p3", name: "Default (no key)", trigger: { kind: "mods", key: "", mods: { shift: false, alt: false, ctrl: false, meta: false }, mouseButton: 0 }, actionId: "101" },
+        { id: "p4", name: "Copy", trigger: { kind: "mods", key: "", mods: { shift: false, alt: true, ctrl: false, meta: false }, mouseButton: 0 }, actionId: "102" },
+        { id: "p5", name: "Export", trigger: { kind: "mods", key: "", mods: { shift: false, alt: false, ctrl: false, meta: true }, mouseButton: 0 }, actionId: "103" },
+        { id: "p6", name: "Bookmark", trigger: { kind: "mods", key: "", mods: { shift: false, alt: false, ctrl: true, meta: false }, mouseButton: 0 }, actionId: "104" }
       ]
     };
     return defaults;
