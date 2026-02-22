@@ -284,32 +284,20 @@ function mouseup(event) {
   }
 }
 
+/**
+ * Return element position and size in page coordinates (to match event.pageX/pageY).
+ * Uses getBoundingClientRect so coordinates are correct with scroll, transforms, and scrollable containers.
+ */
 function getXY(element) {
-  var x = 0;
-  var y = 0;
-
-  var parent = element;
-  var style;
-  var matrix;
-  do {
-    style = window.getComputedStyle(parent);
-    matrix = new WebKitCSSMatrix(style.webkitTransform);
-    x += parent.offsetLeft + matrix.m41;
-    y += parent.offsetTop + matrix.m42;
-  } while (parent = parent.offsetParent);
-
-  parent = element;
-  while (parent && parent !== document.body) {
-    if (parent.scrollleft) {
-      x -= parent.scrollLeft;
-    }
-    if (parent.scrollTop) {
-      y -= parent.scrollTop;
-    }
-    parent = parent.parentNode;
-  }
-
-  return { x: x, y: y };
+  var rect = element.getBoundingClientRect();
+  var scrollX = window.pageXOffset || document.documentElement.scrollLeft;
+  var scrollY = window.pageYOffset || document.documentElement.scrollTop;
+  return {
+    x: rect.left + scrollX,
+    y: rect.top + scrollY,
+    width: rect.width,
+    height: rect.height
+  };
 }
 
 function start() {
@@ -355,18 +343,18 @@ function start() {
     }
 
     var pos = getXY(page_links[i]);
-    var width = page_links[i].offsetWidth;
-    var height = page_links[i].offsetHeight;
+    var width = pos.width != null ? pos.width : page_links[i].offsetWidth;
+    var height = pos.height != null ? pos.height : page_links[i].offsetHeight;
 
-    // attempt to get the actual size of the link
+    // Expand bounds if a child IMG is larger (e.g. image links)
     for (var k = 0; k < page_links[i].childNodes.length; k++) {
       if (page_links[i].childNodes[k].nodeName === "IMG") {
-        const pos2 = getXY(page_links[i].childNodes[k]);
+        var pos2 = getXY(page_links[i].childNodes[k]);
         if (pos.y >= pos2.y) {
           pos.y = pos2.y;
-          width = Math.max(width, page_links[i].childNodes[k].offsetWidth);
-          height = Math.max(height, page_links[i].childNodes[k].offsetHeight);
         }
+        width = Math.max(width, pos2.width != null ? pos2.width : page_links[i].childNodes[k].offsetWidth);
+        height = Math.max(height, pos2.height != null ? pos2.height : page_links[i].childNodes[k].offsetHeight);
       }
     }
 
@@ -472,32 +460,17 @@ function detech(x, y, open) {
     scroll_id = setInterval(scroll, 100);
   }
 
-  var count = 0;
   var count_tabs = new Set();
   var open_tabs = [];
 
   for (var i = 0; i < links.length; i++) {
-    if (
-      (!smart_select || links[i].important) &&
-      !(links[i].x1 > box.x2 || links[i].x2 < box.x1 || links[i].y1 > box.y2 || links[i].y2 < box.y1)
-    ) {
+    var overlaps = !(links[i].x1 > box.x2 || links[i].x2 < box.x1 || links[i].y1 > box.y2 || links[i].y2 < box.y1);
+    if (overlaps) {
       if (open) {
         open_tabs.push({
           "url": links[i].href,
           "title": links[i].innerText
         });
-      }
-
-      // check if important links have been selected and possibly redo
-      if (!smart_select) {
-        if (links[i].important) {
-          smart_select = true;
-          return false;
-        }
-      } else {
-        if (links[i].important) {
-          count++;
-        }
       }
 
       if (links[i].box === null) {
@@ -524,12 +497,6 @@ function detech(x, y, open) {
         links[i].box.style.visibility = "hidden";
       }
     }
-  }
-
-  // important links were found, but not anymore so redo
-  if (smart_select && count === 0) {
-    smart_select = false;
-    return false;
   }
 
   const link_count = count_tabs.size;

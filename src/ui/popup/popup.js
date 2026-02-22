@@ -1,5 +1,6 @@
 /**
  * LinkSlinger popup — link analysis UI
+ * State machine: idle | scanning | result_clean | result_threat | error
  * Zero friction: auto-fill current tab URL. Terminal-style loading. Bento results.
  */
 
@@ -12,6 +13,14 @@ const SCAN_PHASES = [
 
 const DONTPOKE_BASE = "https://dontpoke.me";
 const LINK_EXPANDER_PATH = "/tools/link-expander";
+
+const STATES = Object.freeze({
+  IDLE: "idle",
+  SCANNING: "scanning",
+  RESULT_CLEAN: "result_clean",
+  RESULT_THREAT: "result_threat",
+  ERROR: "error"
+});
 
 const el = {
   urlInput: document.getElementById("urlInput"),
@@ -30,25 +39,53 @@ const el = {
   openSettings: document.getElementById("openSettings")
 };
 
+let state = STATES.IDLE;
 let scanPhaseIndex = 0;
 let scanInterval = null;
 let lastAnalyzedUrl = null;
+/** @type {{ verdictText?: string, redirects?: string[], threatPills?: { label: string, level: string }[] } */
+let resultPayload = null;
 
-/** Set popup to default state: input visible, no results, no scanning */
-function setStateDefault() {
+function setState(newState, payload = null) {
+  state = newState;
+  resultPayload = payload ?? resultPayload;
+  render();
+}
+
+function render() {
+  switch (state) {
+    case STATES.IDLE:
+      renderIdle();
+      break;
+    case STATES.SCANNING:
+      renderScanning();
+      break;
+    case STATES.RESULT_CLEAN:
+    case STATES.RESULT_THREAT:
+      renderResult();
+      break;
+    case STATES.ERROR:
+      renderError();
+      break;
+    default:
+      renderIdle();
+  }
+}
+
+function renderIdle() {
+  if (scanInterval) {
+    clearInterval(scanInterval);
+    scanInterval = null;
+  }
   el.scanningArea.hidden = true;
   el.resultsArea.hidden = true;
   el.urlInput.classList.remove("scanning");
   el.analyzeBtn.disabled = false;
   el.analyzeBtn.textContent = "Analyze Link";
-  if (scanInterval) {
-    clearInterval(scanInterval);
-    scanInterval = null;
-  }
+  updateFullReportLink();
 }
 
-/** Show terminal-style scanning state */
-function setStateScanning() {
+function renderScanning() {
   el.resultsArea.hidden = true;
   el.scanningArea.hidden = false;
   el.urlInput.classList.add("scanning");
@@ -56,14 +93,15 @@ function setStateScanning() {
   el.analyzeBtn.textContent = "Analyzing…";
   scanPhaseIndex = 0;
   el.scanningLine.textContent = SCAN_PHASES[0];
+  if (scanInterval) clearInterval(scanInterval);
   scanInterval = setInterval(() => {
     scanPhaseIndex = (scanPhaseIndex + 1) % SCAN_PHASES.length;
     el.scanningLine.textContent = SCAN_PHASES[scanPhaseIndex];
   }, 600);
+  updateFullReportLink();
 }
 
-/** Show result state (clean or threat). Stub data for Phase 1. */
-function setStateResult(verdict, options = {}) {
+function renderResult() {
   if (scanInterval) {
     clearInterval(scanInterval);
     scanInterval = null;
@@ -73,11 +111,13 @@ function setStateResult(verdict, options = {}) {
   el.analyzeBtn.disabled = false;
   el.analyzeBtn.textContent = "Analyze Link";
 
-  const isClean = verdict === "clean";
+  const isClean = state === STATES.RESULT_CLEAN;
   el.verdictBanner.className = "verdict-banner glass " + (isClean ? "clean" : "threat");
-  el.verdictText.textContent = isClean ? "No threats detected." : (options.verdictText || "Malicious Redirect Detected.");
+  el.verdictText.textContent = isClean
+    ? "No threats detected."
+    : (resultPayload?.verdictText || "Malicious Redirect Detected.");
 
-  const hops = options.redirects || [el.urlInput.value.trim()];
+  const hops = resultPayload?.redirects || [el.urlInput.value.trim()];
   el.redirectCard.hidden = false;
   el.redirectList.innerHTML = "";
   hops.forEach((url) => {
@@ -86,7 +126,7 @@ function setStateResult(verdict, options = {}) {
     el.redirectList.appendChild(li);
   });
 
-  const pills = options.threatPills || [];
+  const pills = resultPayload?.threatPills || [];
   if (pills.length > 0) {
     el.threatCard.hidden = false;
     el.threatPills.innerHTML = "";
@@ -101,11 +141,22 @@ function setStateResult(verdict, options = {}) {
   }
 
   el.resultsArea.hidden = false;
-  lastAnalyzedUrl = el.urlInput.value.trim();
   updateFullReportLink();
 }
 
-/** Truncate URL in the middle to fit ~400px with monospace 12px */
+function renderError() {
+  if (scanInterval) {
+    clearInterval(scanInterval);
+    scanInterval = null;
+  }
+  el.scanningArea.hidden = true;
+  el.urlInput.classList.remove("scanning");
+  el.analyzeBtn.disabled = false;
+  el.analyzeBtn.textContent = "Analyze Link";
+  el.resultsArea.hidden = true;
+  updateFullReportLink();
+}
+
 function truncateUrl(url, maxLen = 52) {
   if (!url || url.length <= maxLen) return url;
   const half = Math.floor((maxLen - 5) / 2);
@@ -120,36 +171,58 @@ function updateFullReportLink() {
   el.fullReportLink.href = href;
 }
 
-/** Stub: simulate analysis. In Phase 1 we don't call a real API. */
+/** Known URL shortener / redirector domains (stub heuristic until real API). */
+const SHORTENER_DOMAINS = [
+  "bit.ly", "bitly.com", "tinyurl.com", "t.co", "goo.gl", "ow.ly", "is.gd",
+  "buff.ly", "adf.ly", "j.mp", "tr.im", "flu.lu", "short.link", "tiny.cc",
+  "cutt.ly", "rebrand.ly", "bl.ink", "linktr.ee", "s.id", "bc.vc"
+];
+
+function getHostname(urlStr) {
+  const s = urlStr.trim();
+  const withProtocol = /^https?:\/\//i.test(s) ? s : "https://" + s;
+  try {
+    return new URL(withProtocol).hostname.toLowerCase().replace(/^www\./, "");
+  } catch (_) {
+    return "";
+  }
+}
+
 function runAnalysis() {
   const url = el.urlInput.value.trim();
   if (!url) return;
 
-  setStateScanning();
   lastAnalyzedUrl = url;
+  setState(STATES.SCANNING);
 
-  // Simulate OSINT delay (2.5s) then show a stub result
   setTimeout(() => {
-    const looksSuspicious = /evil|malware|phish|\.tk\b|\.ml\b/i.test(url) || url.length > 80;
+    const host = getHostname(url);
+    const isShortener = SHORTENER_DOMAINS.some((d) => host === d || host.endsWith("." + d));
+    const hasBadKeywords = /evil|malware|phish|\.tk\b|\.ml\b/i.test(url);
+    const looksSuspicious = isShortener || hasBadKeywords || url.length > 80;
+
     if (looksSuspicious) {
-      setStateResult("threat", {
-        verdictText: "Suspicious or high-risk indicators detected.",
+      setState(STATES.RESULT_THREAT, {
+        verdictText: isShortener
+          ? "URL shortener or redirector — expand for full analysis."
+          : "Suspicious or high-risk indicators detected.",
         redirects: [url, "https://example.com/landing"],
-        threatPills: [{ label: "URLhaus", level: "danger" }, { label: "OTX", level: "warning" }]
+        threatPills: [
+          ...(isShortener ? [{ label: "Shortener", level: "warning" }] : []),
+          { label: "URLhaus", level: "danger" },
+          { label: "OTX", level: "warning" }
+        ]
       });
     } else {
-      setStateResult("clean", {
-        redirects: [url]
-      });
+      setState(STATES.RESULT_CLEAN, { redirects: [url] });
     }
   }, 2500);
 }
 
-/** On load: get active tab URL and fill input */
 async function initWithTabUrl() {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (tab && tab.url && (tab.url.startsWith("http://") || tab.url.startsWith("https://"))) {
+    if (tab?.url && /^https?:\/\//i.test(tab.url)) {
       el.urlInput.value = tab.url;
     }
   } catch (_) {
@@ -165,10 +238,10 @@ function bindEvents() {
   });
 
   el.clearBtn.addEventListener("click", () => {
-    setStateDefault();
-    el.urlInput.value = "";
     lastAnalyzedUrl = null;
-    updateFullReportLink();
+    resultPayload = null;
+    setState(STATES.IDLE);
+    el.urlInput.value = "";
   });
 
   if (el.openSettings) {
@@ -180,6 +253,7 @@ function bindEvents() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  setState(STATES.IDLE);
   initWithTabUrl();
   bindEvents();
 });

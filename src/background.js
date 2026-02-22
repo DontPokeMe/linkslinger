@@ -16,6 +16,7 @@ class SettingsManager {
    * Normalize settings: fill defaults, migrate old keys, remove invalid values.
    * Prevents schema drift and partial-write breakage. Always read-modify-write
    * the full settings object; use this before save and after load.
+   * Pure and idempotent: does not mutate input; normalize(normalize(x)) === normalize(x).
    */
   normalizeSettings(settings) {
     if (!settings || typeof settings !== "object") {
@@ -136,6 +137,9 @@ class SettingsManager {
     // If we’re behind the CURRENT_VERSION, fill in any needed fields
     const data = await this._getStorageData(["settings", "version"]);
     if (data.version !== CURRENT_VERSION) {
+      if (typeof console !== "undefined" && console.warn) {
+        console.warn("LinkSlinger: settings migration applied (version bump).");
+      }
       const normalized = this.normalizeSettings(data.settings);
       await this._setStorageData({ settings: normalized, version: CURRENT_VERSION });
       this._cache = normalized;
@@ -484,10 +488,16 @@ function setupContextMenu() {
 }
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
-  if (info.menuItemId === "linkslinger-inspect" && info.linkUrl) {
-    const url = "https://dontpoke.me/tools/link-expander?url=" + encodeURIComponent(info.linkUrl);
-    chrome.tabs.create({ url });
+  if (info.menuItemId !== "linkslinger-inspect" || !info.linkUrl) return;
+  const raw = info.linkUrl.trim();
+  if (!/^https?:\/\//i.test(raw)) {
+    if (typeof console !== "undefined" && console.warn) {
+      console.warn("LinkSlinger: Inspect skipped — only http/https links are supported.", raw.slice(0, 50));
+    }
+    return;
   }
+  const url = "https://dontpoke.me/tools/link-expander?url=" + encodeURIComponent(raw);
+  chrome.tabs.create({ url });
 });
 
 // On startup, do an async check for initialization or updates

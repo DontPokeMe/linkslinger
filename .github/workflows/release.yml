@@ -34,7 +34,7 @@ jobs:
 
       - name: Verify manifest version matches tag
         run: |
-          # Use jq if available, otherwise use sed (more portable than grep -P)
+          # Guard: fail if tag and manifest version differ (prevents accidental mismatches)
           if command -v jq &> /dev/null; then
             MANIFEST_VERSION=$(jq -r '.version' src/manifest.json)
           else
@@ -44,7 +44,7 @@ jobs:
           echo "Manifest version: $MANIFEST_VERSION"
           echo "Tag version: $TAG_VERSION"
           if [ "$MANIFEST_VERSION" != "$TAG_VERSION" ]; then
-            echo "Error: Manifest version ($MANIFEST_VERSION) does not match tag version ($TAG_VERSION)"
+            echo "::error::Manifest version ($MANIFEST_VERSION) does not match tag version ($TAG_VERSION). Update manifest or tag before releasing."
             exit 1
           fi
           echo "✓ Version match: $MANIFEST_VERSION"

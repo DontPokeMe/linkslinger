@@ -92,6 +92,14 @@ Each action defines:
 
 ---
 
+## Architecture Notes
+
+* **Service worker** (`background.js`) handles action execution (open tabs, copy, bookmark, new window).
+* **Content script** (`content.js`) handles DOM selection and overlay rendering only; it does not perform actions.
+* **Communication** is via `chrome.runtime.sendMessage` / `chrome.runtime.onMessage` (content → background for "activate"; background broadcasts "update" to tabs when settings change).
+
+---
+
 ## Permissions
 
 Declared in `manifest.json`:
