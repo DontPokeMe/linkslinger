@@ -39,6 +39,9 @@ var lateArmStartX = 0;
 var lateArmStartY = 0;
 var lateArmButton = LEFT_BUTTON;
 
+// QA only: set true to log activation state on mousedown (key capture / profile resolution). Do not enable in production.
+var DEBUG_ACTIVATION = false;
+
 // Changed from chrome.extension.sendMessage to chrome.runtime.sendMessage
 chrome.runtime.sendMessage({
   message: "init"
@@ -314,6 +317,11 @@ function mousedown(event) {
   if (isInputField) return;
 
   activeActionId = resolveActiveActionId(mouse_button, event);
+
+  if (DEBUG_ACTIVATION && typeof console !== "undefined" && console.log) {
+    var profile = settings && settings.profiles ? settings.profiles.find(function (p) { return p.actionId === activeActionId; }) : null;
+    console.log("LinkSlinger [QA] mousedown:", { heldKey: heldKey, eventKey: event.key, activeActionId: activeActionId, profileName: profile ? profile.name : null });
+  }
 
   // Late-arm: key trigger only (e.g., user presses Z after mouse down).
   // If no match at mousedown, wait up to 250ms for heldKey to become valid.

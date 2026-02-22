@@ -40,6 +40,10 @@ src/
 
 ---
 
+For **Chrome Web Store** listing permission text and reviewer response wording, see [docs/STORE-REVIEW.md](docs/STORE-REVIEW.md).
+
+---
+
 ## Development Setup
 
 ### 1. Clone Repository

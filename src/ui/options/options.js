@@ -45,6 +45,11 @@ function getTriggerByValue(value) {
   return opt ? opt.trigger : TRIGGER_OPTIONS[0].trigger;
 }
 
+function actionDisplayLabel(actionType) {
+  const labels = { bm: "Bookmark", copy: "Copy", tabs: "Open in tabs", win: "New window", export: "Export" };
+  return labels[actionType] || actionType || "tabs";
+}
+
 let filterValidationTimer = null;
 function validateFilterPattern() {
   const input = document.getElementById('filterPattern');
@@ -203,7 +208,7 @@ function renderProfilesTable(profiles, actions) {
       const o = document.createElement('option');
       o.value = id;
       const action = actions[id];
-      const label = id + ' (' + (action && action.action ? action.action : 'tabs') + ')';
+      const label = id + ' (' + actionDisplayLabel(action?.action) + ')';
       o.textContent = label;
       if (p.actionId === id) o.selected = true;
       actionSelect.appendChild(o);
@@ -313,7 +318,7 @@ function setupSaveHandlers() {
       actionIds.forEach((id) => {
         const o = document.createElement('option');
         o.value = id;
-        o.textContent = id + ' (' + (actions[id]?.action || 'tabs') + ')';
+        o.textContent = id + ' (' + actionDisplayLabel(actions[id]?.action) + ')';
         if (id === firstId) o.selected = true;
         actionSelect.appendChild(o);
       });

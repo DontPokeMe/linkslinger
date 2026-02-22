@@ -82,6 +82,11 @@ class SettingsManager {
     if (Object.keys(out.actions).length === 0) {
       out.actions = { "101": defaultAction };
     }
+    // Ensure Bookmark action (104) exists for store compliance and existing users
+    const defs = this.initDefaults();
+    if (!out.actions["104"]) {
+      out.actions["104"] = defs.actions["104"];
+    }
 
     const actionIds = Object.keys(out.actions);
     const firstActionId = actionIds[0] || "101";
@@ -234,13 +239,34 @@ class SettingsManager {
             filterCaseInsensitive: true,
             copy: 1
           }
+        },
+        "104": {
+          mouse: 0,
+          key: 90,
+          action: "bm",
+          color: "#8b5cf6",
+          options: {
+            smart: 0,
+            ignore: [0],
+            delay: 0,
+            close: 0,
+            block: true,
+            reverse: false,
+            end: false,
+            filterPattern: "",
+            filterMode: "exclude",
+            filterCaseInsensitive: true,
+            copy: 1
+          }
         }
       },
       blocked: [],
       profiles: [
         { id: "p1", name: "Default", trigger: { kind: "key", key: "z", mods: { shift: false, alt: false, ctrl: false, meta: false }, mouseButton: 0 }, actionId: "101" },
-        { id: "p2", name: "Copy", trigger: { kind: "mods", key: "", mods: { shift: true, alt: false, ctrl: false, meta: false }, mouseButton: 0 }, actionId: "102" },
-        { id: "p3", name: "Export", trigger: { kind: "mods", key: "", mods: { shift: false, alt: true, ctrl: false, meta: false }, mouseButton: 0 }, actionId: "103" }
+        { id: "p2", name: "Default (Shift)", trigger: { kind: "mods", key: "", mods: { shift: true, alt: false, ctrl: false, meta: false }, mouseButton: 0 }, actionId: "101" },
+        { id: "p3", name: "Copy", trigger: { kind: "mods", key: "", mods: { shift: false, alt: true, ctrl: false, meta: false }, mouseButton: 0 }, actionId: "102" },
+        { id: "p4", name: "Export", trigger: { kind: "mods", key: "", mods: { shift: false, alt: false, ctrl: false, meta: true }, mouseButton: 0 }, actionId: "103" },
+        { id: "p5", name: "Bookmark", trigger: { kind: "mods", key: "", mods: { shift: false, alt: false, ctrl: true, meta: false }, mouseButton: 0 }, actionId: "104" }
       ]
     };
     return defaults;
@@ -449,6 +475,67 @@ function formatLink({ url, title }, copyFormat) {
   }
 }
 
+// ——— Bookmark action: save selected links under Bookmarks Bar → LinkSlinger → YYYY-MM-DD ———
+function findBookmarksBar(tree) {
+  if (!tree || !tree[0]) return null;
+  let found = null;
+  (function walk(node) {
+    if (!node) return;
+    if (node.id === "1") found = node;
+    if (node.title && node.title.toLowerCase().includes("bookmarks bar")) found = node;
+    if (node.children) node.children.forEach(walk);
+  })(tree[0]);
+  return found;
+}
+
+async function ensureFolder(parentId, title) {
+  const kids = await chrome.bookmarks.getChildren(parentId);
+  const existing = kids.find((k) => !k.url && k.title === title);
+  if (existing) return existing.id;
+  const created = await chrome.bookmarks.create({ parentId, title });
+  return created.id;
+}
+
+async function handleBookmarkAction(urls) {
+  const raw = urls || [];
+  const safe = raw.map((u) => (u && typeof u.url === "string" ? u.url : typeof u === "string" ? u : "")).filter((u) => /^https?:\/\//i.test(u));
+
+  const tree = await chrome.bookmarks.getTree();
+  const bar = findBookmarksBar(tree);
+  const rootId = bar?.id || "1";
+
+  const lsFolderId = await ensureFolder(rootId, "LinkSlinger");
+  const dateTitle = new Date().toISOString().slice(0, 10);
+  const dateFolderId = await ensureFolder(lsFolderId, dateTitle);
+
+  const existing = await chrome.bookmarks.getChildren(dateFolderId);
+  const existingSet = new Set(existing.filter((n) => n.url).map((n) => n.url));
+
+  let added = 0;
+  let skipped = 0;
+  for (const url of safe) {
+    if (existingSet.has(url)) {
+      skipped++;
+      continue;
+    }
+    let title;
+    try {
+      const u = new URL(url);
+      title = u.hostname || url;
+    } catch (e) {
+      title = url;
+    }
+    await chrome.bookmarks.create({ parentId: dateFolderId, title, url });
+    added++;
+    existingSet.add(url);
+  }
+
+  if (typeof console !== "undefined" && console.log) {
+    console.log("LinkSlinger: Bookmark action — added:", added, "skipped:", skipped, "total:", safe.length);
+  }
+  return { added, skipped, total: safe.length };
+}
+
 async function handleRequests(request, sender, sendResponse) {
   // We want to load the settings before responding, to ensure we have the latest
   let currentSettings = await settingsManager.load();
@@ -477,25 +564,13 @@ async function handleRequests(request, sender, sendResponse) {
           copyToClipboard(text);
           break;
         }
-        case "bm":
-          chrome.bookmarks.getTree((bookmarkTreeNodes) => {
-            chrome.bookmarks.create(
-              {
-                parentId: bookmarkTreeNodes[0].children[1].id, 
-                title: "LinkSlinger " + timeConverter(new Date())
-              },
-              function(newFolder) {
-                request.urls.forEach((u) => {
-                  chrome.bookmarks.create({
-                    parentId: newFolder.id,
-                    title: u.title,
-                    url: u.url
-                  });
-                });
-              }
-            );
-          });
+        case "bm": {
+          const result = await handleBookmarkAction(request.urls);
+          if (typeof console !== "undefined" && console.log) {
+            console.log("LinkSlinger: Bookmark —", result.added, "added,", result.skipped, "skipped");
+          }
           break;
+        }
         case "win":
           chrome.windows.getCurrent((currentWindow) => {
             chrome.windows.create(
