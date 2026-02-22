@@ -1,0 +1,38 @@
+name: Chrome Web Store
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            TAG="${{ github.event.release.tag_name }}"
+            echo "VERSION=${TAG#v}" >> $GITHUB_OUTPUT
+          else
+            V=$(node -p "require('./src/manifest.json').version")
+            echo "VERSION=$V" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Package extension
+        run: |
+          cd src
+          zip -r ../linkslinger.zip . -x "*.git*"
+
+      - name: Publish to Chrome Web Store
+        uses: cicirello/jwt-chrome-extension@v2
+        with:
+          extension-id: ${{ secrets.CHROME_EXTENSION_ID }}
+          client-id: ${{ secrets.CHROME_CLIENT_ID }}
+          client-secret: ${{ secrets.CHROME_CLIENT_SECRET }}
+          refresh-token: ${{ secrets.CHROME_REFRESH_TOKEN }}
+          zip-path: linkslinger.zip
+          publish: true
