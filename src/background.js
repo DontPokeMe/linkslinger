@@ -6,6 +6,28 @@ const CURRENT_VERSION = "5";
 /** Schema version of the settings object; bump on migrations. */
 const SETTINGS_SCHEMA_VERSION = 1;
 
+function normKey(k) {
+  if (typeof k !== "string") return "";
+  const s = k.trim().toLowerCase();
+  return s.length === 1 ? s : "";
+}
+
+function normMods(m) {
+  return {
+    shift: !!m?.shift,
+    alt: !!m?.alt,
+    ctrl: !!m?.ctrl,
+    meta: !!m?.meta
+  };
+}
+
+function triggerSig(t) {
+  const btn = Number.isInteger(t.mouseButton) ? t.mouseButton : 0;
+  if (t.kind === "key") return `key:${t.key}|btn:${btn}`;
+  const mods = t.mods || {};
+  return `mods:${+mods.shift}${+mods.alt}${+mods.ctrl}${+mods.meta}|btn:${btn}`;
+}
+
 class SettingsManager {
   constructor() {
     this._cache = null;
@@ -25,7 +47,8 @@ class SettingsManager {
     const out = {
       version: typeof settings.version === "number" ? settings.version : SETTINGS_SCHEMA_VERSION,
       actions: typeof settings.actions === "object" && settings.actions !== null ? { ...settings.actions } : {},
-      blocked: Array.isArray(settings.blocked) ? settings.blocked.filter(b => typeof b === "string") : []
+      blocked: Array.isArray(settings.blocked) ? settings.blocked.filter(b => typeof b === "string") : [],
+      profiles: Array.isArray(settings.profiles) ? [...settings.profiles] : undefined
     };
     const defaultAction = this.initDefaults().actions["101"];
     for (const id of Object.keys(out.actions)) {
@@ -34,10 +57,12 @@ class SettingsManager {
         delete out.actions[id];
         continue;
       }
+      var actionVal = a.action;
+      if (actionVal === "window") actionVal = "win";
       out.actions[id] = {
         mouse: typeof a.mouse === "number" ? a.mouse : defaultAction.mouse,
         key: typeof a.key === "number" ? a.key : defaultAction.key,
-        action: ["tabs", "win", "copy", "bm"].includes(a.action) ? a.action : defaultAction.action,
+        action: ["tabs", "win", "copy", "bm", "export"].includes(actionVal) ? actionVal : defaultAction.action,
         color: typeof a.color === "string" && /^#[0-9A-Fa-f]{6}$/.test(a.color) ? a.color : defaultAction.color,
         options: {
           smart: a.options && (a.options.smart === 0 || a.options.smart === 1) ? a.options.smart : defaultAction.options.smart,
@@ -46,13 +71,74 @@ class SettingsManager {
           close: typeof (a.options && a.options.close) === "number" ? a.options.close : defaultAction.options.close,
           block: typeof (a.options && a.options.block) === "boolean" ? a.options.block : defaultAction.options.block,
           reverse: typeof (a.options && a.options.reverse) === "boolean" ? a.options.reverse : defaultAction.options.reverse,
-          end: typeof (a.options && a.options.end) === "boolean" ? a.options.end : defaultAction.options.end
+          end: typeof (a.options && a.options.end) === "boolean" ? a.options.end : defaultAction.options.end,
+          filterPattern: typeof (a.options && a.options.filterPattern) === "string" ? a.options.filterPattern : "",
+          filterMode: (a.options && a.options.filterMode === "include") ? "include" : "exclude",
+          filterCaseInsensitive: typeof (a.options && a.options.filterCaseInsensitive) === "boolean" ? a.options.filterCaseInsensitive : true,
+          copy: typeof (a.options && a.options.copy) === "number" && a.options.copy >= 0 && a.options.copy <= 6 ? a.options.copy : 1
         }
       };
     }
     if (Object.keys(out.actions).length === 0) {
       out.actions = { "101": defaultAction };
     }
+
+    const actionIds = Object.keys(out.actions);
+    const firstActionId = actionIds[0] || "101";
+
+    if (!Array.isArray(out.profiles) || out.profiles.length === 0) {
+      out.profiles = [
+        {
+          id: "p1",
+          name: "Default",
+          trigger: {
+            kind: "key",
+            key: "z",
+            mods: { shift: false, alt: false, ctrl: false, meta: false },
+            mouseButton: 0
+          },
+          actionId: firstActionId
+        }
+      ];
+    } else {
+      const seen = new Set();
+      out.profiles = out.profiles
+        .map((p, idx) => {
+          const trigger = p?.trigger || {};
+          const kind = trigger.kind === "mods" ? "mods" : "key";
+          const key = kind === "key" ? normKey(trigger.key) : "";
+          const mods = kind === "mods" ? normMods(trigger.mods) : normMods({});
+          const mouseButton = Number.isInteger(trigger.mouseButton) ? trigger.mouseButton : 0;
+          const actionId = String(p?.actionId || firstActionId);
+          const validActionId = out.actions[actionId] ? actionId : firstActionId;
+          const cleaned = {
+            id: typeof p?.id === "string" && p.id ? p.id : `p${idx + 1}`,
+            name: typeof p?.name === "string" && p.name ? p.name : `Profile ${idx + 1}`,
+            trigger: { kind, key, mods, mouseButton },
+            actionId: validActionId
+          };
+          if (cleaned.trigger.kind === "key" && !cleaned.trigger.key) cleaned.trigger.key = "z";
+          return cleaned;
+        })
+        .filter((p) => {
+          const sig = triggerSig(p.trigger);
+          if (seen.has(sig)) return false;
+          seen.add(sig);
+          return true;
+        });
+
+      if (out.profiles.length === 0) {
+        out.profiles = [
+          {
+            id: "p1",
+            name: "Default",
+            trigger: { kind: "key", key: "z", mods: { shift: false, alt: false, ctrl: false, meta: false }, mouseButton: 0 },
+            actionId: firstActionId
+          }
+        ];
+      }
+    }
+
     return out;
   }
 
@@ -105,11 +191,57 @@ class SettingsManager {
             close: 0,
             block: true,
             reverse: false,
-            end: false
+            end: false,
+            filterPattern: "",
+            filterMode: "exclude",
+            filterCaseInsensitive: true
+          }
+        },
+        "102": {
+          mouse: 0,
+          key: 90,
+          action: "copy",
+          color: "#3b82f6",
+          options: {
+            smart: 0,
+            ignore: [0],
+            delay: 0,
+            close: 0,
+            block: true,
+            reverse: false,
+            end: false,
+            filterPattern: "",
+            filterMode: "exclude",
+            filterCaseInsensitive: true,
+            copy: 1
+          }
+        },
+        "103": {
+          mouse: 0,
+          key: 90,
+          action: "export",
+          color: "#22c55e",
+          options: {
+            smart: 0,
+            ignore: [0],
+            delay: 0,
+            close: 0,
+            block: true,
+            reverse: false,
+            end: false,
+            filterPattern: "",
+            filterMode: "exclude",
+            filterCaseInsensitive: true,
+            copy: 1
           }
         }
       },
-      blocked: []
+      blocked: [],
+      profiles: [
+        { id: "p1", name: "Default", trigger: { kind: "key", key: "z", mods: { shift: false, alt: false, ctrl: false, meta: false }, mouseButton: 0 }, actionId: "101" },
+        { id: "p2", name: "Copy", trigger: { kind: "mods", key: "", mods: { shift: true, alt: false, ctrl: false, meta: false }, mouseButton: 0 }, actionId: "102" },
+        { id: "p3", name: "Export", trigger: { kind: "mods", key: "", mods: { shift: false, alt: true, ctrl: false, meta: false }, mouseButton: 0 }, actionId: "103" }
+      ]
     };
     return defaults;
   }
@@ -406,6 +538,11 @@ async function handleRequests(request, sender, sendResponse) {
               );
             });
           });
+          break;
+        case "export":
+          if (typeof console !== "undefined" && console.log) {
+            console.log("LinkSlinger: Export (stub) —", request.urls.length, "links. Sprint 2C will add downloads.");
+          }
           break;
       }
       break;

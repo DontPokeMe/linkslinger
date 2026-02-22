@@ -9,7 +9,9 @@ const INCLUDE_LINKS = 1;
 
 var settings = null;
 var setting = -1;
+var activeActionId = null;
 var key_pressed = 0;
+var heldKey = "";
 var mouse_button = null;
 var stop_menu = false;
 var box_on = false;
@@ -21,6 +23,11 @@ var links = [];
 var box = null;
 var count_label = null;
 var overlay = null;
+var currentSelectionColor = "#3b82f6";
+var linkFilterRegex = null;
+var linkFilterMode = "exclude";
+var linkFilterCaseInsensitive = true;
+var isFilterBroken = false;
 var scroll_bug_ignore = false;
 var os = ((navigator.appVersion.indexOf("Win") === -1) ? OS_LINUX : OS_WIN);
 var timer = 0;
@@ -44,27 +51,28 @@ chrome.runtime.sendMessage({
     return;
   }
 
-  if (!response.actions || typeof response.actions !== 'object') {
+  if (!response.actions || typeof response.actions !== "object") {
     console.error("LinkSlinger: Invalid settings structure:", response);
     return;
   }
 
-  settings = response.actions;
+  settings = response;
+  applySelectionColorFromSettings();
+  applyFilterFromSettings();
 
   var allowed = true;
-  if (response.blocked && Array.isArray(response.blocked)) {
-    for (var i in response.blocked) {
-      if (response.blocked[i] === "") continue;
-      var re = new RegExp(response.blocked[i], "i");
-
+  if (settings.blocked && Array.isArray(settings.blocked)) {
+    for (var i in settings.blocked) {
+      if (settings.blocked[i] === "") continue;
+      var re = new RegExp(settings.blocked[i], "i");
       if (re.test(window.location.href)) {
         allowed = false;
-        console.log("LinkSlinger is blocked on this site: " + response.blocked[i] + "~" + window.location.href);
+        console.log("LinkSlinger is blocked on this site: " + settings.blocked[i] + "~" + window.location.href);
       }
     }
   }
 
-  if (allowed && settings) {
+  if (allowed && settings.actions) {
     // Debug: log settings to verify they loaded
     console.log("LinkSlinger: Settings loaded", settings);
     console.log("LinkSlinger: Default key should be 90 (Z)");
@@ -86,9 +94,101 @@ chrome.runtime.sendMessage({
 // Changed from chrome.extension.onMessage to chrome.runtime.onMessage
 chrome.runtime.onMessage.addListener(function(request, sender, callback) {
   if (request.message === "update") {
-    settings = request.settings.actions;
+    settings = request.settings;
+    applySelectionColorFromSettings();
+    applyFilterFromSettings();
+    if (box) {
+      box.style.setProperty("--ls-box-color", currentSelectionColor);
+      if (count_label) count_label.style.setProperty("--ls-box-color", currentSelectionColor);
+    }
   }
 });
+
+var DEFAULT_SELECTION_COLOR = "#3b82f6";
+
+function normalizeHexColor(value) {
+  if (typeof value !== "string" || !value) return DEFAULT_SELECTION_COLOR;
+  var hex = value.trim();
+  if (/^#[0-9A-Fa-f]{6}$/.test(hex)) return hex;
+  if (/^[0-9A-Fa-f]{6}$/.test(hex)) return "#" + hex;
+  return DEFAULT_SELECTION_COLOR;
+}
+
+function getActiveActionCfg() {
+  if (activeActionId && settings?.actions?.[activeActionId]) return settings.actions[activeActionId];
+  var firstId = Object.keys(settings?.actions || {})[0];
+  return firstId ? settings.actions[firstId] : null;
+}
+
+function triggerSigContent(t) {
+  var btn = Number.isInteger(t.mouseButton) ? t.mouseButton : 0;
+  if (t.kind === "key") return "key:" + t.key + "|btn:" + btn;
+  var m = t.mods || {};
+  return "mods:" + (+m.shift) + (+m.alt) + (+m.ctrl) + (+m.meta) + "|btn:" + btn;
+}
+
+function resolveActiveActionId(mouseButton, e) {
+  var profiles = Array.isArray(settings?.profiles) ? settings.profiles : [];
+  if (!profiles.length) return null;
+  if (heldKey) {
+    var sig = "key:" + heldKey + "|btn:" + mouseButton;
+    for (var i = 0; i < profiles.length; i++) {
+      var p = profiles[i];
+      if (p?.trigger && triggerSigContent(p.trigger) === sig && settings.actions?.[p.actionId]) return p.actionId;
+    }
+  }
+  var mods = { shift: !!e.shiftKey, alt: !!e.altKey, ctrl: !!e.ctrlKey, meta: !!e.metaKey };
+  if (mods.shift || mods.alt || mods.ctrl || mods.meta) {
+    var modSig = "mods:" + (+mods.shift) + (+mods.alt) + (+mods.ctrl) + (+mods.meta) + "|btn:" + mouseButton;
+    for (var j = 0; j < profiles.length; j++) {
+      var q = profiles[j];
+      if (q?.trigger && triggerSigContent(q.trigger) === modSig && settings.actions?.[q.actionId]) return q.actionId;
+    }
+  }
+  return null;
+}
+
+function applySelectionColorFromSettings() {
+  var cfg = getActiveActionCfg();
+  if (cfg && cfg.color) currentSelectionColor = normalizeHexColor(cfg.color);
+}
+
+function applyFilterFromSettings(optionalActionId) {
+  var cfg = optionalActionId && settings?.actions?.[optionalActionId] ? settings.actions[optionalActionId] : getActiveActionCfg();
+  if (!cfg || !cfg.options) {
+    linkFilterRegex = null;
+    linkFilterMode = "exclude";
+    linkFilterCaseInsensitive = true;
+    isFilterBroken = false;
+    return;
+  }
+  var opts = cfg.options;
+  var pattern = typeof opts.filterPattern === "string" ? opts.filterPattern.trim() : "";
+  linkFilterMode = opts.filterMode === "include" ? "include" : "exclude";
+  linkFilterCaseInsensitive = opts.filterCaseInsensitive !== false;
+  if (!pattern) {
+    linkFilterRegex = null;
+    isFilterBroken = false;
+    return;
+  }
+  try {
+    linkFilterRegex = new RegExp(pattern, linkFilterCaseInsensitive ? "i" : "");
+    isFilterBroken = false;
+  } catch (e) {
+    if (typeof console !== "undefined" && console.error) {
+      console.error("LinkSlinger: Invalid regex filter from settings.", e);
+    }
+    linkFilterRegex = null;
+    isFilterBroken = true;
+  }
+}
+
+function shouldSelectLink(url) {
+  if (isFilterBroken) return true;
+  if (!linkFilterRegex) return true;
+  var matches = linkFilterRegex.test(url);
+  return linkFilterMode === "include" ? matches : !matches;
+}
 
 function mousemove(event) {
   prevent_escalation(event);
@@ -133,85 +233,54 @@ function clean_up() {
 function mousedown(event) {
   mouse_button = event.button;
 
-  // Use key_pressed tracked from keydown events
-  // Focus on Z key (90) for now
-  var current_key = key_pressed;
-  
-  console.log("LinkSlinger: mousedown - mouse_button:", mouse_button, "key_pressed:", key_pressed, "current_key:", current_key);
-  
-  // CRITICAL: Don't activate in input fields (per Midori's guide Section 2.3)
   var target = event.target;
-  var isInputField = target.tagName === 'INPUT' || 
-                     target.tagName === 'TEXTAREA' || 
-                     target.isContentEditable ||
-                     (target.closest && target.closest('input, textarea, [contenteditable="true"]'));
-  
-  if (isInputField) {
-    console.log("LinkSlinger: Ignoring mousedown in input field");
-    return;
-  }
-  
-  // Temporarily set key_pressed for allow_selection check
-  var saved_key_pressed = key_pressed;
-  key_pressed = current_key;
+  var isInputField = target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable ||
+    (target.closest && target.closest("input, textarea, [contenteditable=\"true\"]"));
+  if (isInputField) return;
 
-  // turn on menu for windows
-  if (os === OS_WIN) {
-    stop_menu = false;
+  activeActionId = resolveActiveActionId(mouse_button, event);
+  if (!activeActionId) return;
+
+  applyFilterFromSettings(activeActionId);
+
+  if (os === OS_WIN) stop_menu = false;
+
+  if (os === OS_LINUX || (os === OS_WIN && mouse_button === LEFT_BUTTON)) {
+    prevent_escalation(event);
   }
 
-  if (allow_selection()) {
-    // don't prevent for windows right click as it breaks spell checker
-    // do prevent for left as otherwise the page becomes highlighted
-    if (os === OS_LINUX || (os === OS_WIN && mouse_button === LEFT_BUTTON)) {
-      prevent_escalation(event);
-    }
-
-    // if mouse up timer is set then clear it as it was just caused by bounce
-    if (timer !== 0) {
-      // console.log("bounced!");
-      clearTimeout(timer);
-      timer = 0;
-
-      // keep menu off for windows
-      if (os === OS_WIN) {
-        stop_menu = true;
-      }
-    } else {
-      // clean up any mistakes
-      if (box_on) {
-        console.log("box wasn't removed from previous operation");
-        clean_up();
-      }
-
-      // create the box
-      if (box === null) {
-        box = document.createElement("span");
-        box.className = "linkslinger-selection-box";
-        box.style.visibility = "hidden";
-
-        count_label = document.createElement("span");
-        count_label.className = "linkslinger-tooltip";
-        count_label.style.visibility = "hidden";
-
-        document.body.appendChild(box);
-        document.body.appendChild(count_label);
-      }
-
-      // update position
-      box.x = event.pageX;
-      box.y = event.pageY;
-      update_box(event.pageX, event.pageY);
-
-      // setup mouse move and mouse up
-      window.addEventListener("mousemove", mousemove, true);
-      window.addEventListener("mouseup", mouseup, true);
-      window.addEventListener("mousewheel", mousewheel, true);
-      window.addEventListener("mouseout", mouseout, true);
-    }
+  if (timer !== 0) {
+    clearTimeout(timer);
+    timer = 0;
+    if (os === OS_WIN) stop_menu = true;
   } else {
-    // Restore key_pressed if selection not allowed
-    key_pressed = saved_key_pressed;
+    if (box_on) clean_up();
+
+    var actionCfg = settings.actions[activeActionId];
+    var boxColor = normalizeHexColor(actionCfg && actionCfg.color ? actionCfg.color : currentSelectionColor);
+    if (box === null) {
+      box = document.createElement("span");
+      box.className = "linkslinger-selection-box";
+      box.style.visibility = "hidden";
+      box.style.setProperty("--ls-box-color", boxColor);
+      count_label = document.createElement("span");
+      count_label.className = "linkslinger-tooltip";
+      count_label.style.visibility = "hidden";
+      count_label.style.setProperty("--ls-box-color", boxColor);
+      document.body.appendChild(box);
+      document.body.appendChild(count_label);
+    } else {
+      box.style.setProperty("--ls-box-color", boxColor);
+      if (count_label) count_label.style.setProperty("--ls-box-color", boxColor);
+    }
+
+    box.x = event.pageX;
+    box.y = event.pageY;
+    update_box(event.pageX, event.pageY);
+    window.addEventListener("mousemove", mousemove, true);
+    window.addEventListener("mouseup", mouseup, true);
+    window.addEventListener("mousewheel", mousewheel, true);
+    window.addEventListener("mouseout", mouseout, true);
   }
 }
 
@@ -313,7 +382,7 @@ function start() {
 
   // create RegExp once
   var re1 = new RegExp("^javascript:", "i");
-  var re2 = new RegExp(settings[setting].options.ignore.slice(1).join("|"), "i");
+  var re2 = new RegExp(settings.actions[activeActionId].options.ignore.slice(1).join("|"), "i");
   var re3 = new RegExp("^H\\d$");
 
   for (var i = 0; i < page_links.length; i++) {
@@ -326,12 +395,12 @@ function start() {
       continue;
     }
     // include/exclude links
-    if (settings[setting].options.ignore.length > 1) {
+    if (settings.actions[activeActionId].options.ignore.length > 1) {
       if (re2.test(page_links[i].href) || re2.test(page_links[i].innerHTML)) {
-        if (settings[setting].options.ignore[0] === EXCLUDE_LINKS) {
+        if (settings.actions[activeActionId].options.ignore[0] === EXCLUDE_LINKS) {
           continue;
         }
-      } else if (settings[setting].options.ignore[0] === INCLUDE_LINKS) {
+      } else if (settings.actions[activeActionId].options.ignore[0] === INCLUDE_LINKS) {
         continue;
       }
     }
@@ -365,7 +434,7 @@ function start() {
     page_links[i].height = height;
     page_links[i].width = width;
     page_links[i].box = null;
-    page_links[i].important = (settings[setting].options.smart === 0 &&
+    page_links[i].important = (settings.actions[activeActionId].options.smart === 0 &&
                                page_links[i].parentNode != null &&
                                re3.test(page_links[i].parentNode.nodeName));
 
@@ -395,7 +464,7 @@ function stop() {
   }
 
   // turn on menu for linux
-  if (os === OS_LINUX && settings[setting].key != key_pressed) {
+  if (os === OS_LINUX && settings.actions[activeActionId].key != key_pressed) {
     stop_menu = false;
   }
 }
@@ -462,10 +531,13 @@ function detech(x, y, open) {
 
   var count_tabs = new Set();
   var open_tabs = [];
+  var overlap_count = 0;
 
   for (var i = 0; i < links.length; i++) {
     var overlaps = !(links[i].x1 > box.x2 || links[i].x2 < box.x1 || links[i].y1 > box.y2 || links[i].y2 < box.y1);
-    if (overlaps) {
+    if (overlaps) overlap_count++;
+    var passesFilter = shouldSelectLink(links[i].href);
+    if (overlaps && passesFilter) {
       if (open) {
         open_tabs.push({
           "url": links[i].href,
@@ -499,15 +571,26 @@ function detech(x, y, open) {
     }
   }
 
-  const link_count = count_tabs.size;
-  count_label.innerText = link_count + (link_count === 1 ? ' link selected' : ' links selected');
+  var link_count = count_tabs.size;
+  var filtered_count = overlap_count - link_count;
+  var label = link_count === 1 ? "1 link selected" : link_count + " links selected";
+  if (isFilterBroken) {
+    label += " (Filter invalid)";
+  } else if (linkFilterRegex && filtered_count > 0) {
+    label = link_count + (link_count === 1 ? " link" : " links") + " (" + filtered_count + " filtered)";
+  }
+  if (activeActionId && settings?.profiles) {
+    var profile = settings.profiles.find(function (p) { return p.actionId === activeActionId; });
+    if (profile && profile.name) label += " — " + profile.name;
+  }
+  count_label.innerText = label;
 
   if (open_tabs.length > 0) {
     // Changed from chrome.extension.sendMessage to chrome.runtime.sendMessage
     chrome.runtime.sendMessage({
       message: "activate",
       urls: open_tabs,
-      setting: settings[setting]
+      setting: settings.actions[activeActionId]
     });
   }
 
@@ -515,10 +598,9 @@ function detech(x, y, open) {
 }
 
 function allow_key(keyCode) {
-  for (var i in settings) {
-    if (settings[i].key === keyCode) {
-      return true;
-    }
+  if (!settings?.actions) return false;
+  for (var i in settings.actions) {
+    if (settings.actions[i].key === keyCode) return true;
   }
   return false;
 }
@@ -539,12 +621,8 @@ function keydown(event) {
   
   if (event.keyCode !== END_KEYCODE && event.keyCode !== HOME_KEYCODE) {
     key_pressed = event.keyCode;
-    // Debug: log key press for troubleshooting
-    console.log("LinkSlinger: Key pressed:", event.keyCode, "Key:", event.key, "key_pressed set to:", key_pressed);
-    // turn menu off for linux
-    if (os === OS_LINUX && allow_key(key_pressed)) {
-      stop_menu = true;
-    }
+    if (!event.repeat && typeof event.key === "string" && event.key.length === 1) heldKey = event.key.toLowerCase();
+    if (os === OS_LINUX && allow_key(key_pressed)) stop_menu = true;
   } else {
     scroll_bug_ignore = true;
   }
@@ -567,41 +645,18 @@ function keyup(event) {
   }
   
   if (event.keyCode !== END_KEYCODE && event.keyCode !== HOME_KEYCODE) {
+    if (typeof event.key === "string" && event.key.length === 1 && event.key.toLowerCase() === heldKey) heldKey = "";
     remove_key();
   }
 }
 
 function remove_key() {
-  // turn menu on for linux
-  if (os === OS_LINUX) {
-    stop_menu = false;
-  }
+  if (os === OS_LINUX) stop_menu = false;
   key_pressed = 0;
 }
 
 function allow_selection() {
-  if (!settings) {
-    console.log("LinkSlinger: allow_selection - no settings");
-    return false;
-  }
-  
-  for (var i in settings) {
-    // Check if mouse button matches (0 = left button)
-    if (settings[i].mouse !== mouse_button) {
-      continue;
-    }
-    
-    // Check if key matches - expecting 90 (Z key)
-    console.log("LinkSlinger: Checking - mouse:", mouse_button, "key_pressed:", key_pressed, "setting key:", settings[i].key);
-    if (settings[i].key === key_pressed) {
-      setting = i;
-      console.log("LinkSlinger: ✓ Selection allowed - mouse:", mouse_button, "key:", key_pressed, "setting:", i);
-      // Border color is now handled by CSS class
-      return true;
-    }
-  }
-  
-  console.log("LinkSlinger: ✗ Selection not allowed - mouse:", mouse_button, "key_pressed:", key_pressed, "settings:", settings);
+  if (box_on) return true;
   return false;
 }
 

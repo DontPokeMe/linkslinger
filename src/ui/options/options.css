@@ -22,7 +22,9 @@
   
   /* Success */
   --success: #22c55e;         /* Success states, "on" indicators */
-  
+  /* Danger */
+  --danger: #ef4444;          /* Error states, invalid input */
+
   /* Spacing */
   --spacing-xs: 8px;
   --spacing-sm: 12px;
@@ -198,6 +200,16 @@ body {
   border-color: var(--accent-primary);
 }
 
+.setting-input.input-error {
+  border-color: var(--danger);
+}
+
+.filter-error {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--danger);
+}
+
 .setting-textarea {
   width: 100%;
   max-width: 600px;
@@ -261,6 +273,66 @@ body {
   font-weight: 600;
   cursor: pointer;
   transition: background 0.2s;
+}
+
+.btn-secondary {
+  padding: 10px 16px;
+  font-size: 14px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.btn-secondary:hover {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.profiles-table {
+  width: 100%;
+  max-width: 640px;
+  border-collapse: collapse;
+  margin-bottom: 16px;
+}
+.profiles-table th,
+.profiles-table td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.profiles-table th {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
+.profiles-table input[type="text"] {
+  width: 100%;
+  max-width: 140px;
+  padding: 6px 8px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  color: var(--text-primary);
+}
+.profiles-table select {
+  padding: 6px 8px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  color: var(--text-primary);
+  min-width: 140px;
+}
+.profiles-table .delete-profile {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 4px;
+}
+.profiles-table .delete-profile:hover {
+  color: var(--danger);
 }
 
 .btn-primary:hover {

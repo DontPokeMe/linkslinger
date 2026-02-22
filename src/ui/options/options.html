@@ -15,7 +15,7 @@
       </div>
       <nav class="sidebar-nav">
         <a href="#general" class="nav-item active" data-section="general">General</a>
-        <a href="#hotkeys" class="nav-item" data-section="hotkeys">Hotkeys</a>
+        <a href="#profiles" class="nav-item" data-section="profiles">Profiles</a>
         <a href="#advanced" class="nav-item" data-section="advanced">Advanced</a>
         <a href="#about" class="nav-item" data-section="about">About</a>
       </nav>
@@ -51,7 +51,7 @@
                 <span>Open in new tabs</span>
               </label>
               <label class="radio-option">
-                <input type="radio" name="defaultAction" value="window">
+                <input type="radio" name="defaultAction" value="win">
                 <span>Open in new window</span>
               </label>
               <label class="radio-option">
@@ -75,19 +75,47 @@
         </div>
       </section>
 
-      <section id="hotkeys" class="settings-section">
-        <h2 class="section-heading">Hotkeys</h2>
+      <section id="profiles" class="settings-section">
+        <h2 class="section-heading">Activation Profiles</h2>
         <div class="settings-card">
-          <p class="setting-description">Configure keyboard shortcuts for link selection.</p>
-          <p class="setting-description" style="margin-top: 16px; color: var(--text-secondary);">
-            Hotkey configuration coming soon. Use Z + Drag to select links.
-          </p>
+          <p class="setting-description">Each profile maps a trigger (key or modifiers + drag) to an action. Left mouse button only for v1.</p>
+          <div id="profilesTableWrap">
+            <table class="profiles-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Trigger</th>
+                  <th>Action</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="profilesTableBody"></tbody>
+            </table>
+          </div>
+          <button type="button" id="addProfileBtn" class="btn-secondary">Add profile</button>
+          <button type="button" id="saveProfilesBtn" class="btn-primary" style="margin-left: 8px;">Save profiles</button>
         </div>
       </section>
 
       <section id="advanced" class="settings-section">
         <h2 class="section-heading">Advanced Settings</h2>
         <div class="settings-card">
+          <div class="setting-group">
+            <label for="filterPattern" class="setting-label">Link filter (regex)</label>
+            <p class="setting-description">
+              Only select links matching (include) or not matching (exclude) this pattern. Leave empty to select all.
+            </p>
+            <input type="text" id="filterPattern" class="setting-input" placeholder="e.g. \.pdf$ or /blog/">
+            <select id="filterMode" class="setting-input" style="margin-top: 8px; max-width: 12rem;">
+              <option value="exclude">Exclude matching</option>
+              <option value="include">Include only matching</option>
+            </select>
+            <label class="checkbox-label" style="margin-top: 8px; display: inline-flex; align-items: center; gap: 8px;">
+              <input type="checkbox" id="filterCaseInsensitive" checked>
+              Case-insensitive
+            </label>
+            <p id="filterPatternError" class="filter-error" role="alert" aria-live="polite" hidden>Invalid regular expression syntax.</p>
+          </div>
           <div class="setting-group">
             <label for="blocklist" class="setting-label">Blocklist</label>
             <p class="setting-description">
@@ -114,7 +142,7 @@
               View on GitHub
             </a>
           </div>
-          <p class="version-info">Version 3.0.5</p>
+          <p class="version-info">Version 3.1.0</p>
         </div>
       </section>
     </main>
