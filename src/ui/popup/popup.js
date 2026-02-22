@@ -5,14 +5,14 @@
  */
 
 const SCAN_PHASES = [
+  "[Checking WHOIS...]",
   "[Resolving DNS...]",
-  "[Tracing Redirects...]",
-  "[Querying Threat Intel...]",
+  "[Checking DNSBL...]",
   "[Analyzing...]"
 ];
 
 const DONTPOKE_BASE = "https://dontpoke.me";
-const LINK_EXPANDER_PATH = "/tools/link-expander";
+const DOMAIN_SCREENER_PATH = "/tools/domain-screener";
 
 const STATES = Object.freeze({
   IDLE: "idle",
@@ -30,21 +30,31 @@ const el = {
   resultsArea: document.getElementById("resultsArea"),
   verdictBanner: document.getElementById("verdictBanner"),
   verdictText: document.getElementById("verdictText"),
-  redirectCard: document.getElementById("redirectCard"),
-  redirectList: document.getElementById("redirectList"),
-  threatCard: document.getElementById("threatCard"),
-  threatPills: document.getElementById("threatPills"),
+  messageCard: document.getElementById("messageCard"),
+  messageText: document.getElementById("messageText"),
+  detailsCard: document.getElementById("detailsCard"),
+  detailsText: document.getElementById("detailsText"),
   fullReportLink: document.getElementById("fullReportLink"),
   clearBtn: document.getElementById("clearBtn"),
-  openSettings: document.getElementById("openSettings")
+  tabAnalyze: document.getElementById("tabAnalyze"),
+  tabSettings: document.getElementById("tabSettings"),
+  panelAnalyze: document.getElementById("panelAnalyze"),
+  panelSettings: document.getElementById("panelSettings"),
+  openSettingsBtn: document.getElementById("openSettingsBtn"),
+  settingsVersion: document.getElementById("settingsVersion")
 };
 
 let state = STATES.IDLE;
 let scanPhaseIndex = 0;
 let scanInterval = null;
 let lastAnalyzedUrl = null;
-/** @type {{ verdictText?: string, redirects?: string[], threatPills?: { label: string, level: string }[] } */
+/** @type {{ domain?: string, summaryText?: string, signals?: Array<{key:string,status:string,detail?:string}>, pills?: Array<{label:string,severity:string,source?:string}> } */
 let resultPayload = null;
+/** Error message shown when state is ERROR (rate limit, network, etc.) */
+let lastErrorMessage = "";
+
+/** True if user has saved a non-empty dontpoke.me API key (Email Domain Screener). */
+let hasApiKey = false;
 
 function setState(newState, payload = null) {
   state = newState;
@@ -81,16 +91,15 @@ function renderIdle() {
   el.resultsArea.hidden = true;
   el.urlInput.classList.remove("scanning");
   el.analyzeBtn.disabled = false;
-  el.analyzeBtn.textContent = "Analyze Link";
+  el.analyzeBtn.textContent = "Screen Domain";
   updateFullReportLink();
 }
 
 function renderScanning() {
   el.resultsArea.hidden = true;
   el.scanningArea.hidden = false;
-  el.urlInput.classList.add("scanning");
   el.analyzeBtn.disabled = true;
-  el.analyzeBtn.textContent = "Analyzing…";
+  el.analyzeBtn.textContent = "Screening…";
   scanPhaseIndex = 0;
   el.scanningLine.textContent = SCAN_PHASES[0];
   if (scanInterval) clearInterval(scanInterval);
@@ -109,35 +118,43 @@ function renderResult() {
   el.scanningArea.hidden = true;
   el.urlInput.classList.remove("scanning");
   el.analyzeBtn.disabled = false;
-  el.analyzeBtn.textContent = "Analyze Link";
+  el.analyzeBtn.textContent = "Screen Domain";
 
-  const isClean = state === STATES.RESULT_CLEAN;
-  el.verdictBanner.className = "verdict-banner glass " + (isClean ? "clean" : "threat");
-  el.verdictText.textContent = isClean
-    ? "No threats detected."
-    : (resultPayload?.verdictText || "Malicious Redirect Detected.");
+  // Derive verdict from signals: any fail -> review, any warn -> review, else allow
+  const signals = resultPayload?.signals || [];
+  const hasFail = signals.some((s) => (s.status || "").toLowerCase() === "fail");
+  const hasWarn = signals.some((s) => (s.status || "").toLowerCase() === "warn");
+  const verdict = hasFail ? "REVIEW" : hasWarn ? "REVIEW" : "ALLOW";
+  const verdictClass = verdict === "ALLOW" ? "allow" : "block";
+  el.verdictBanner.className = "verdict-banner glass " + verdictClass;
+  el.verdictText.textContent = resultPayload?.domain ? resultPayload.domain + " — " + verdict : verdict;
 
-  const hops = resultPayload?.redirects || [el.urlInput.value.trim()];
-  el.redirectCard.hidden = false;
-  el.redirectList.innerHTML = "";
-  hops.forEach((url) => {
-    const li = document.createElement("li");
-    li.textContent = truncateUrl(url);
-    el.redirectList.appendChild(li);
-  });
+  if (el.messageCard && el.messageText) {
+    const msg = resultPayload?.summaryText || resultPayload?.message || null;
+    if (msg) {
+      el.messageText.textContent = msg;
+      el.messageCard.hidden = false;
+    } else {
+      el.messageCard.hidden = true;
+    }
+  }
 
-  const pills = resultPayload?.threatPills || [];
-  if (pills.length > 0) {
-    el.threatCard.hidden = false;
-    el.threatPills.innerHTML = "";
-    pills.forEach(({ label, level }) => {
-      const span = document.createElement("span");
-      span.className = "threat-pill " + (level === "danger" ? "danger" : "warning");
-      span.textContent = (level === "danger" ? "🔴 " : "🟡 ") + label;
-      el.threatPills.appendChild(span);
+  if (el.detailsCard && el.detailsText) {
+    const parts = [];
+    (resultPayload?.signals || []).forEach((s) => {
+      parts.push("[" + (s.status || "").toUpperCase() + "] " + (s.key || "") + ": " + (s.detail || ""));
     });
-  } else {
-    el.threatCard.hidden = true;
+    (resultPayload?.pills || []).forEach((p) => {
+      parts.push("• " + (p.label || "") + " (" + (p.severity || "info") + ")");
+    });
+    if (parts.length) {
+      el.detailsText.textContent = parts.join("\n");
+      el.detailsCard.hidden = false;
+    } else {
+      el.detailsCard.hidden = true;
+    }
+  } else if (el.detailsCard) {
+    el.detailsCard.hidden = true;
   }
 
   el.resultsArea.hidden = false;
@@ -152,8 +169,13 @@ function renderError() {
   el.scanningArea.hidden = true;
   el.urlInput.classList.remove("scanning");
   el.analyzeBtn.disabled = false;
-  el.analyzeBtn.textContent = "Analyze Link";
-  el.resultsArea.hidden = true;
+  el.analyzeBtn.textContent = "Screen Domain";
+
+  el.resultsArea.hidden = false;
+  el.verdictBanner.className = "verdict-banner glass block";
+  el.verdictText.textContent = lastErrorMessage || "Something went wrong.";
+  if (el.messageCard) el.messageCard.hidden = true;
+  if (el.detailsCard) el.detailsCard.hidden = true;
   updateFullReportLink();
 }
 
@@ -164,66 +186,59 @@ function truncateUrl(url, maxLen = 52) {
 }
 
 function updateFullReportLink() {
-  const url = lastAnalyzedUrl || el.urlInput.value.trim();
-  const href = url
-    ? `${DONTPOKE_BASE}${LINK_EXPANDER_PATH}?url=${encodeURIComponent(url)}`
-    : `${DONTPOKE_BASE}${LINK_EXPANDER_PATH}`;
+  const domain = (resultPayload && resultPayload.domain) || lastAnalyzedUrl || el.urlInput.value.trim();
+  const href = domain
+    ? `${DONTPOKE_BASE}${DOMAIN_SCREENER_PATH}?domain=${encodeURIComponent(domain)}`
+    : `${DONTPOKE_BASE}${DOMAIN_SCREENER_PATH}`;
   el.fullReportLink.href = href;
 }
 
-/** Known URL shortener / redirector domains (stub heuristic until real API). */
-const SHORTENER_DOMAINS = [
-  "bit.ly", "bitly.com", "tinyurl.com", "t.co", "goo.gl", "ow.ly", "is.gd",
-  "buff.ly", "adf.ly", "j.mp", "tr.im", "flu.lu", "short.link", "tiny.cc",
-  "cutt.ly", "rebrand.ly", "bl.ink", "linktr.ee", "s.id", "bc.vc"
-];
+async function runAnalysis() {
+  const input = el.urlInput.value.trim();
+  if (!input) return;
 
-function getHostname(urlStr) {
-  const s = urlStr.trim();
-  const withProtocol = /^https?:\/\//i.test(s) ? s : "https://" + s;
-  try {
-    return new URL(withProtocol).hostname.toLowerCase().replace(/^www\./, "");
-  } catch (_) {
-    return "";
-  }
-}
-
-function runAnalysis() {
-  const url = el.urlInput.value.trim();
-  if (!url) return;
-
-  lastAnalyzedUrl = url;
+  lastAnalyzedUrl = input;
+  lastErrorMessage = "";
   setState(STATES.SCANNING);
 
-  setTimeout(() => {
-    const host = getHostname(url);
-    const isShortener = SHORTENER_DOMAINS.some((d) => host === d || host.endsWith("." + d));
-    const hasBadKeywords = /evil|malware|phish|\.tk\b|\.ml\b/i.test(url);
-    const looksSuspicious = isShortener || hasBadKeywords || url.length > 80;
-
-    if (looksSuspicious) {
-      setState(STATES.RESULT_THREAT, {
-        verdictText: isShortener
-          ? "URL shortener or redirector — expand for full analysis."
-          : "Suspicious or high-risk indicators detected.",
-        redirects: [url, "https://example.com/landing"],
-        threatPills: [
-          ...(isShortener ? [{ label: "Shortener", level: "warning" }] : []),
-          { label: "URLhaus", level: "danger" },
-          { label: "OTX", level: "warning" }
-        ]
-      });
-    } else {
-      setState(STATES.RESULT_CLEAN, { redirects: [url] });
-    }
-  }, 2500);
+  return new Promise(function (resolve) {
+    chrome.runtime.sendMessage({ message: "domain_screener", input }, function (result) {
+      if (chrome.runtime.lastError) {
+        lastErrorMessage = chrome.runtime.lastError.message || "Extension error";
+        setState(STATES.ERROR);
+        resolve();
+        return;
+      }
+      if (result && result.ok && result.payload) {
+        setState(
+          STATES.RESULT_CLEAN,
+          result.payload
+        );
+      } else if (result && !result.ok && result.error) {
+        lastErrorMessage = result.error;
+        setState(STATES.ERROR);
+      } else if (result && result.error) {
+        lastErrorMessage = result.error;
+        setState(STATES.ERROR);
+      } else {
+        lastErrorMessage = "Invalid response";
+        setState(STATES.ERROR);
+      }
+      resolve();
+    });
+  });
 }
 
 async function initWithTabUrl() {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab?.url && /^https?:\/\//i.test(tab.url)) {
-      el.urlInput.value = tab.url;
+      try {
+        const u = new URL(tab.url);
+        el.urlInput.value = u.hostname.replace(/^www\./i, "") || tab.url;
+      } catch (_) {
+        el.urlInput.value = tab.url;
+      }
     }
   } catch (_) {
     // Ignore (e.g. restricted page)
@@ -244,16 +259,58 @@ function bindEvents() {
     el.urlInput.value = "";
   });
 
-  if (el.openSettings) {
-    el.openSettings.addEventListener("click", (e) => {
-      e.preventDefault();
+  if (el.openSettingsBtn) {
+    el.openSettingsBtn.addEventListener("click", () => {
       chrome.runtime.openOptionsPage();
     });
   }
+
+  if (el.tabAnalyze && el.tabSettings && el.panelAnalyze && el.panelSettings) {
+    el.tabAnalyze.addEventListener("click", () => switchTab("analyze"));
+    el.tabSettings.addEventListener("click", () => switchTab("settings"));
+  }
 }
 
-document.addEventListener("DOMContentLoaded", () => {
+function switchTab(name) {
+  const isAnalyze = name === "analyze";
+  el.tabAnalyze.classList.toggle("active", isAnalyze);
+  el.tabSettings.classList.toggle("active", !isAnalyze);
+  el.tabAnalyze.setAttribute("aria-selected", isAnalyze ? "true" : "false");
+  el.tabSettings.setAttribute("aria-selected", !isAnalyze ? "true" : "false");
+  el.panelAnalyze.classList.toggle("hidden", !isAnalyze);
+  el.panelSettings.classList.toggle("hidden", isAnalyze);
+}
+
+function initSettingsPanel() {
+  if (el.settingsVersion && chrome.runtime.getManifest) {
+    const manifest = chrome.runtime.getManifest();
+    el.settingsVersion.textContent = "Version " + (manifest.version || "");
+  }
+}
+
+/**
+ * Show or hide API-key–dependent UI (Analyze tab, footer). Call after reading dontpokeApiKey.
+ */
+function applyApiKeyVisibility() {
+  if (el.tabAnalyze) el.tabAnalyze.hidden = !hasApiKey;
+  if (el.panelAnalyze) el.panelAnalyze.hidden = !hasApiKey;
+  const footer = document.querySelector(".popup-footer");
+  if (footer) footer.hidden = !hasApiKey;
+  const apiKeyHint = document.getElementById("apiKeyHint");
+  if (apiKeyHint) apiKeyHint.hidden = hasApiKey;
+  if (hasApiKey) {
+    switchTab("analyze");
+  } else {
+    switchTab("settings");
+  }
+}
+
+document.addEventListener("DOMContentLoaded", async () => {
+  const { dontpokeApiKey } = await chrome.storage.local.get("dontpokeApiKey");
+  hasApiKey = typeof dontpokeApiKey === "string" && dontpokeApiKey.trim().length > 0;
+  applyApiKeyVisibility();
   setState(STATES.IDLE);
   initWithTabUrl();
   bindEvents();
+  initSettingsPanel();
 });

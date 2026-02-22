@@ -204,6 +204,320 @@ body {
   border-color: var(--danger);
 }
 
+/* ----- Advanced Settings: dividers, glass inputs, API key locked state ----- */
+.advanced-card .setting-group {
+  margin-bottom: var(--spacing-xl);
+}
+
+.advanced-divider {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  margin: var(--spacing-lg) 0;
+}
+
+.glass-input {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  color: var(--text-primary);
+}
+
+.glass-input:focus {
+  outline: none;
+  border-color: rgba(99, 102, 241, 0.5);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+}
+
+.textarea-glass {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 13px;
+}
+
+.textarea-glass:focus {
+  outline: none;
+  border-color: rgba(99, 102, 241, 0.5);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+}
+
+.locked-state {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 12px 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  max-width: 400px;
+}
+
+.api-key-locked-label {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0 8px;
+}
+
+.api-key-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(34, 197, 94, 0.9);
+  background: rgba(34, 197, 94, 0.12);
+  border: 1px solid rgba(34, 197, 94, 0.25);
+  padding: 4px 10px;
+  border-radius: 6px;
+}
+
+.masked-key {
+  color: rgba(255, 255, 255, 0.55);
+  letter-spacing: 3px;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 13px;
+}
+
+.btn-remove {
+  background: rgba(239, 68, 68, 0.1);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.btn-remove:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.trigger-capture-wrap {
+  min-width: 140px;
+}
+.trigger-capture-input {
+  cursor: pointer;
+  min-width: 160px;
+}
+
+.trigger-mods-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  margin-top: 6px;
+}
+.trigger-mod-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.trigger-mod-checkbox {
+  margin: 0;
+  accent-color: var(--accent-primary);
+}
+
+/* ----- Settings: Card layout ----- */
+.settings-card-main {
+  max-width: 900px;
+}
+
+.settings-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  margin-top: 2rem;
+}
+
+.profile-card {
+  position: relative;
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 20px;
+  padding-right: 48px;
+  box-shadow: 0 4px 24px -1px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.profile-card:hover {
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 6px 28px -1px rgba(0, 0, 0, 0.25);
+}
+
+.profile-card-delete {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  opacity: 0.5;
+  transition: opacity 0.2s, color 0.2s, background 0.2s, border-color 0.2s;
+}
+
+.profile-card-delete:hover {
+  opacity: 1;
+  color: #ff4d4d;
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.profile-card-delete svg {
+  flex-shrink: 0;
+}
+
+.profile-card-content {
+  display: grid;
+  grid-template-columns: 1fr 2fr 1.5fr;
+  align-items: start;
+  gap: 20px;
+}
+
+@media (max-width: 720px) {
+  .profile-card-content {
+    grid-template-columns: 1fr;
+  }
+}
+
+.profile-card-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.field-label-modifiers {
+  margin-top: 10px;
+}
+
+/* Dark glass inputs in profile cards */
+.input-glass,
+.select-glass {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  color: var(--text-primary);
+}
+
+.input-glass:focus,
+.select-glass:focus {
+  outline: none;
+  border-color: rgba(99, 102, 241, 0.5);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+}
+
+.select-glass {
+  padding: 8px 12px;
+  min-width: 140px;
+  cursor: pointer;
+}
+
+/* Modifier toggles (Shift, Ctrl, Alt) */
+.modifier-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.modifier-toggle-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.modifier-checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 36px;
+  height: 28px;
+  margin: 0;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s;
+}
+
+.modifier-checkbox:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.modifier-checkbox:checked {
+  background: #6366f1;
+  border-color: #818cf8;
+  color: #fff;
+  box-shadow: 0 0 8px rgba(99, 102, 241, 0.4);
+}
+
+.smart-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.smart-label .smart-checkbox {
+  margin: 0;
+  accent-color: var(--accent-primary);
+}
+
+/* Bottom buttons: more gap between Add profile and Save profiles */
+.settings-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 2rem;
+}
+
+.btn-save-profiles {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  border: none;
+  box-shadow: 0 4px 14px 0 rgba(99, 102, 241, 0.4);
+}
+
+.btn-save-profiles:hover {
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  box-shadow: 0 6px 20px 0 rgba(99, 102, 241, 0.5);
+}
+
 .filter-error {
   margin-top: 6px;
   font-size: 12px;
@@ -289,87 +603,220 @@ body {
   color: var(--accent-primary);
 }
 
-.profiles-table {
-  width: 100%;
-  max-width: 640px;
-  border-collapse: collapse;
-  margin-bottom: 16px;
-}
-.profiles-table th,
-.profiles-table td {
-  padding: 8px 12px;
-  text-align: left;
-  border-bottom: 1px solid var(--border-subtle);
-}
-.profiles-table th {
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text-secondary);
-}
-.profiles-table input[type="text"] {
-  width: 100%;
-  max-width: 140px;
-  padding: 6px 8px;
-  background: var(--bg-primary);
-  border: 1px solid var(--border-subtle);
-  border-radius: 4px;
-  color: var(--text-primary);
-}
-.profiles-table select {
-  padding: 6px 8px;
-  background: var(--bg-primary);
-  border: 1px solid var(--border-subtle);
-  border-radius: 4px;
-  color: var(--text-primary);
-  min-width: 140px;
-}
-.profiles-table .delete-profile {
-  background: none;
-  border: none;
-  color: var(--text-secondary);
-  cursor: pointer;
-  padding: 4px;
-}
-.profiles-table .delete-profile:hover {
-  color: var(--danger);
-}
-
 .btn-primary:hover {
   background: var(--accent-hover);
 }
 
-/* About Section */
+/* About Section – Dark Glass */
+/* Main content wrapper: glass container + spacing from sidebar/heading */
+.about-container {
+  max-width: 800px;
+  margin: 20px;
+  padding: 32px;
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+}
+
+.about-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+}
+
+.about-hero {
+  margin-bottom: var(--spacing-xs);
+}
+
+.about-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-sm);
+}
+
+.about-tagline {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.about-tagline strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* Glass cards (compose with .feature-card for hover) */
+.about-glass-card {
+  background: rgba(20, 20, 20, 0.7);
+  backdrop-filter: blur(12px) saturate(180%);
+  -webkit-backdrop-filter: blur(12px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: var(--spacing-lg);
+}
+
+/* Dark Glass Feature Card – hover lift & shadow (Ren) */
+.feature-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.feature-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.about-section-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-sm);
+}
+
 .about-text {
   color: var(--text-secondary);
-  margin-bottom: var(--spacing-lg);
-  line-height: 1.8;
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.about-text strong {
+  color: var(--text-primary);
+}
+
+/* Key Features list – tidy alignment (icon + text) */
+.about-features,
+.features-list {
+  list-style: none;
+  padding: 0;
+  margin: 24px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.about-features li,
+.features-list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.about-features li:last-child,
+.features-list li:last-child {
+  margin-bottom: 0;
+}
+
+.about-feature-item strong {
+  color: var(--text-primary);
+}
+
+.about-feature-icon,
+.features-list .about-feature-icon {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6366f1;
+}
+
+.about-feature-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* Feature text for pending (Coming Soon) items */
+.feature-pending {
+  opacity: 0.7;
+  font-style: italic;
+}
+
+/* "Coming Soon" badge – glass status indicator */
+.badge-coming-soon {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 3px 10px;
+  border-radius: 20px;
+  margin-left: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  cursor: default;
+  user-select: none;
+  vertical-align: middle;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
 }
 
 .about-links {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--spacing-sm);
-  margin-bottom: var(--spacing-lg);
+  margin-top: var(--spacing-md);
+  margin-bottom: var(--spacing-sm);
 }
 
 .link-button {
   padding: 10px 20px;
-  background: var(--bg-primary);
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
+  background: rgba(20, 20, 20, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
   color: var(--text-primary);
   text-decoration: none;
   font-size: 14px;
-  transition: all 0.2s;
+  font-weight: 500;
+  transition: border-color 0.2s, color 0.2s, box-shadow 0.2s;
   display: inline-block;
 }
 
 .link-button:hover {
   border-color: var(--accent-primary);
   color: var(--accent-primary);
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.25);
 }
 
+/* Glass button – semi-transparent, subtle border (About links) */
+.about-links .link-button,
+.glass-button {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: 8px;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  transition: all 0.3s ease;
+}
+.about-links .link-button:hover,
+.glass-button:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.25);
+  box-shadow: 0 0 15px rgba(255, 255, 255, 0.1);
+}
+
+/* Version – bottom-right of last card, low emphasis */
+.about-glass-card:last-child {
+  position: relative;
+  padding-bottom: 2.5rem;
+}
 .version-info {
-  font-size: 12px;
+  position: absolute;
+  right: 1rem;
+  bottom: 1rem;
+  font-size: 11px;
+  opacity: 0.65;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   color: var(--text-secondary);
 }

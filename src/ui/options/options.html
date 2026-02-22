@@ -14,8 +14,7 @@
         <h1>LinkSlinger</h1>
       </div>
       <nav class="sidebar-nav">
-        <a href="#general" class="nav-item active" data-section="general">General</a>
-        <a href="#profiles" class="nav-item" data-section="profiles">Profiles</a>
+        <a href="#settings" class="nav-item active" data-section="settings">Settings</a>
         <a href="#advanced" class="nav-item" data-section="advanced">Advanced</a>
         <a href="#about" class="nav-item" data-section="about">About</a>
       </nav>
@@ -23,83 +22,21 @@
 
     <!-- Main Content -->
     <main class="main-content">
-      <section id="general" class="settings-section active">
-        <h2 class="section-heading">General Settings</h2>
-
-        <!-- Setting Card -->
-        <div class="settings-card">
-          <div class="setting-group">
-            <label for="activationKey" class="setting-label">
-              Selection Activation Key
-            </label>
-            <p class="setting-description">
-              Hold this key while dragging to select links
-            </p>
-            <select id="activationKey" class="setting-input">
-              <option value="z" selected>Z</option>
-            </select>
-          </div>
-
-          <div class="setting-group">
-            <label class="setting-label">Default Action</label>
-            <p class="setting-description">
-              What happens when you release the selection
-            </p>
-            <div class="radio-group">
-              <label class="radio-option">
-                <input type="radio" name="defaultAction" value="tabs" checked>
-                <span>Open in new tabs</span>
-              </label>
-              <label class="radio-option">
-                <input type="radio" name="defaultAction" value="win">
-                <span>Open in new window</span>
-              </label>
-              <label class="radio-option">
-                <input type="radio" name="defaultAction" value="copy">
-                <span>Copy to clipboard</span>
-              </label>
-            </div>
-          </div>
-
-          <div class="setting-group">
-            <label class="setting-label">
-              <input type="checkbox" id="smartSelect">
-              Enable Smart Selection
-            </label>
-            <p class="setting-description">
-              Automatically filter out non-relevant links
-            </p>
-          </div>
-
-          <button id="saveSettings" class="btn-primary">Save Settings</button>
-        </div>
-      </section>
-
-      <section id="profiles" class="settings-section">
-        <h2 class="section-heading">Activation Profiles</h2>
-        <div class="settings-card">
+      <section id="settings" class="settings-section active">
+        <h2 class="section-heading">Settings</h2>
+        <div class="settings-card settings-card-main">
           <p class="setting-description">Each profile maps a trigger (key or modifiers + drag) to an action. Left mouse button only for v1.</p>
-          <div id="profilesTableWrap">
-            <table class="profiles-table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Trigger</th>
-                  <th>Action</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody id="profilesTableBody"></tbody>
-            </table>
+          <div id="profilesGrid" class="settings-grid" role="list"></div>
+          <div class="settings-buttons">
+            <button type="button" id="addProfileBtn" class="btn-secondary">Add profile</button>
+            <button type="button" id="saveProfilesBtn" class="btn-primary btn-save-profiles">Save profiles</button>
           </div>
-          <button type="button" id="addProfileBtn" class="btn-secondary">Add profile</button>
-          <button type="button" id="saveProfilesBtn" class="btn-primary" style="margin-left: 8px;">Save profiles</button>
         </div>
       </section>
 
       <section id="advanced" class="settings-section">
         <h2 class="section-heading">Advanced Settings</h2>
-        <div class="settings-card">
+        <div class="settings-card advanced-card">
           <div class="setting-group">
             <label for="filterPattern" class="setting-label">Link filter (regex)</label>
             <p class="setting-description">
@@ -116,33 +53,107 @@
             </label>
             <p id="filterPatternError" class="filter-error" role="alert" aria-live="polite" hidden>Invalid regular expression syntax.</p>
           </div>
+          <hr class="advanced-divider" aria-hidden="true">
           <div class="setting-group">
             <label for="blocklist" class="setting-label">Blocklist</label>
             <p class="setting-description">
               URLs to exclude from selection (one per line)
             </p>
-            <textarea id="blocklist" class="setting-textarea" rows="6" placeholder="example.com&#10;another-site.com"></textarea>
+            <textarea id="blocklist" class="setting-textarea textarea-glass" rows="6" placeholder="example.com&#10;another-site.com"></textarea>
+          </div>
+          <hr class="advanced-divider" aria-hidden="true">
+          <div class="setting-group">
+            <label class="setting-label">
+              <input type="checkbox" id="debugMode">
+              Debug Mode
+            </label>
+            <p class="setting-description">
+              Log activation state (key, profile) on mousedown in the console. Use for troubleshooting selection.
+            </p>
+          </div>
+          <hr class="advanced-divider" aria-hidden="true">
+          <div class="setting-group api-key-group">
+            <label for="dontpokeApiKey" class="setting-label">dontpoke.me API key (Email Domain Screener)</label>
+            <p class="setting-description">
+              Optional. Format: PREFIX.SECRET. Used by the Analyze tab (email/domain screening). Get keys from your dontpoke.me account.
+            </p>
+            <div id="api-input-container">
+              <input type="password" id="dontpokeApiKey" class="setting-input glass-input" placeholder="PREFIX.SECRET" autocomplete="off">
+            </div>
+            <div id="api-locked-container" class="locked-state" style="display: none;">
+              <span class="api-key-locked-label">
+                <span class="api-key-badge">Key Active</span>
+                <span class="masked-key" aria-hidden="true">••••••••••••••••••••••••</span>
+              </span>
+              <button type="button" id="removeApiKeyBtn" class="btn-remove">Remove Key</button>
+            </div>
           </div>
           <button id="saveAdvanced" class="btn-primary">Save Advanced Settings</button>
         </div>
       </section>
 
       <section id="about" class="settings-section">
-        <h2 class="section-heading">About LinkSlinger</h2>
-        <div class="settings-card">
-          <p class="about-text">
-            LinkSlinger is part of the dontpoke.me OSINT toolkit.
-            Open source, privacy-focused, built by security researchers.
-          </p>
-          <div class="about-links">
-            <a href="https://dontpoke.me/tools/linkslinger" target="_blank" class="link-button">
-              Visit Website
-            </a>
-            <a href="https://github.com/DontPokeMe/linkslinger" target="_blank" class="link-button">
-              View on GitHub
-            </a>
+        <div class="about-container">
+          <div class="about-page">
+          <header class="about-hero">
+            <h2 class="about-title">About LinkSlinger</h2>
+            <p class="about-tagline">
+              LinkSlinger is a powerful browser extension designed to streamline link management and enhance your browsing efficiency. Part of the <strong>dontpoke.me</strong> OSINT toolkit, LinkSlinger helps you quickly select, copy, and open multiple links with simple mouse gestures.
+            </p>
+          </header>
+
+          <div class="about-glass-card feature-card">
+            <h3 class="about-section-title">Open Source &amp; Privacy-Focused</h3>
+            <p class="about-text">
+              LinkSlinger is built by security researchers with privacy and transparency at its core. As an open-source project, our code is publicly available for review, ensuring you can trust what's running in your browser.
+            </p>
           </div>
-          <p class="version-info">Version 3.2.0</p>
+
+          <div class="about-glass-card feature-card">
+            <h3 class="about-section-title">Key Features</h3>
+            <ul class="about-features">
+              <li class="about-feature-item">
+                <span class="about-feature-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4l7.07 17 2.51-7.39L21 11.07z"/></svg></span>
+                <span><strong>Bulk Link Selection:</strong> Select multiple links at once using customizable mouse gestures.</span>
+              </li>
+              <li class="about-feature-item">
+                <span class="about-feature-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg></span>
+                <span><strong>Flexible Actions:</strong> Open links in new tabs, copy URLs to clipboard, or bookmark in bulk.</span>
+              </li>
+              <li class="about-feature-item">
+                <span class="about-feature-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg></span>
+                <span><strong>Context Menu Integration:</strong> Right-click options for quick link management.</span>
+              </li>
+              <li class="about-feature-item">
+                <span class="about-feature-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></span>
+                <span><strong>RegEx Filtering:</strong> Advanced link filtering with regular expressions.</span>
+              </li>
+              <li class="about-feature-item">
+                <span class="about-feature-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
+                <span><strong>Privacy First:</strong> No tracking, no data collection, no external calls.</span>
+              </li>
+            </ul>
+          </div>
+
+          <div class="about-glass-card feature-card">
+            <h3 class="about-section-title">Part of the OSINT Toolkit</h3>
+            <p class="about-text">
+              LinkSlinger is one of several privacy-focused tools in the <strong>dontpoke.me</strong> suite, designed for researchers, analysts, and power users who need efficient, secure browsing tools.
+            </p>
+          </div>
+
+          <div class="about-glass-card feature-card">
+            <h3 class="about-section-title">Get Involved</h3>
+            <p class="about-text">
+              LinkSlinger is open source and welcomes contributions. Visit our GitHub repository to report issues, suggest features, or contribute code.
+            </p>
+            <div class="about-links">
+              <a href="https://dontpoke.me/tools/linkslinger" target="_blank" rel="noopener noreferrer" class="link-button glass-button">Visit Website</a>
+              <a href="https://github.com/DontPokeMe/linkslinger" target="_blank" rel="noopener noreferrer" class="link-button glass-button">View on GitHub</a>
+            </div>
+            <span class="version-info">v4.0.0</span>
+          </div>
+          </div>
         </div>
       </section>
     </main>

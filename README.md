@@ -35,12 +35,7 @@ src/
   assets/
     icons/
     fonts/
-  pages/                # Test / internal pages
 ```
-
----
-
-For **Chrome Web Store** listing permission text and reviewer response wording, see [docs/STORE-REVIEW.md](docs/STORE-REVIEW.md).
 
 ---
 

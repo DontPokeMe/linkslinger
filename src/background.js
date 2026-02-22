@@ -9,7 +9,7 @@ const SETTINGS_SCHEMA_VERSION = 1;
 function normKey(k) {
   if (typeof k !== "string") return "";
   const s = k.trim().toLowerCase();
-  return s.length === 1 ? s : "";
+  return s.length >= 1 ? s : "";
 }
 
 function normMods(m) {
@@ -23,9 +23,10 @@ function normMods(m) {
 
 function triggerSig(t) {
   const btn = Number.isInteger(t.mouseButton) ? t.mouseButton : 0;
-  if (t.kind === "key") return `key:${t.key}|btn:${btn}`;
   const mods = t.mods || {};
-  return `mods:${+mods.shift}${+mods.alt}${+mods.ctrl}${+mods.meta}|btn:${btn}`;
+  const modStr = `${+mods.shift}${+mods.alt}${+mods.ctrl}${+mods.meta}`;
+  if (t.kind === "key" && t.key) return `key:${normKey(t.key)}|mods:${modStr}|btn:${btn}`;
+  return `mods:${modStr}|btn:${btn}`;
 }
 
 class SettingsManager {
@@ -48,7 +49,8 @@ class SettingsManager {
       version: typeof settings.version === "number" ? settings.version : SETTINGS_SCHEMA_VERSION,
       actions: typeof settings.actions === "object" && settings.actions !== null ? { ...settings.actions } : {},
       blocked: Array.isArray(settings.blocked) ? settings.blocked.filter(b => typeof b === "string") : [],
-      profiles: Array.isArray(settings.profiles) ? [...settings.profiles] : undefined
+      profiles: Array.isArray(settings.profiles) ? [...settings.profiles] : undefined,
+      debugMode: typeof settings.debugMode === "boolean" ? settings.debugMode : false
     };
     const defaultAction = this.initDefaults().actions["101"];
     for (const id of Object.keys(out.actions)) {
@@ -110,10 +112,14 @@ class SettingsManager {
       out.profiles = out.profiles
         .map((p, idx) => {
           const trigger = p?.trigger || {};
-          const kind = trigger.kind === "mods" ? "mods" : "key";
-          const key = kind === "key" ? normKey(trigger.key) : "";
-          const mods = kind === "mods" ? normMods(trigger.mods) : normMods({});
+          let kind = trigger.kind === "mods" ? "mods" : "key";
+          let key = kind === "key" ? normKey(trigger.key) : "";
+          let mods = normMods(trigger.mods || {});
           const mouseButton = Number.isInteger(trigger.mouseButton) ? trigger.mouseButton : 0;
+          if (kind === "mods" || !key) {
+            kind = "key";
+            key = key || "z";
+          }
           const actionId = String(p?.actionId || firstActionId);
           const validActionId = out.actions[actionId] ? actionId : firstActionId;
           const cleaned = {
@@ -131,18 +137,6 @@ class SettingsManager {
           seen.add(sig);
           return true;
         });
-
-      // Ensure "no key" fallback exists so left-drag works when key events never reach the page
-      const noKeySig = "mods:0000|btn:0";
-      if (!seen.has(noKeySig)) {
-        out.profiles.push({
-          id: "p0-no-key",
-          name: "Default (no key)",
-          trigger: { kind: "mods", key: "", mods: { shift: false, alt: false, ctrl: false, meta: false }, mouseButton: 0 },
-          actionId: firstActionId
-        });
-        seen.add(noKeySig);
-      }
 
       if (out.profiles.length === 0) {
         out.profiles = [
@@ -273,13 +267,12 @@ class SettingsManager {
         }
       },
       blocked: [],
+      debugMode: false,
       profiles: [
         { id: "p1", name: "Default", trigger: { kind: "key", key: "z", mods: { shift: false, alt: false, ctrl: false, meta: false }, mouseButton: 0 }, actionId: "101" },
-        { id: "p2", name: "Default (Shift)", trigger: { kind: "mods", key: "", mods: { shift: true, alt: false, ctrl: false, meta: false }, mouseButton: 0 }, actionId: "101" },
-        { id: "p3", name: "Default (no key)", trigger: { kind: "mods", key: "", mods: { shift: false, alt: false, ctrl: false, meta: false }, mouseButton: 0 }, actionId: "101" },
-        { id: "p4", name: "Copy", trigger: { kind: "mods", key: "", mods: { shift: false, alt: true, ctrl: false, meta: false }, mouseButton: 0 }, actionId: "102" },
-        { id: "p5", name: "Export", trigger: { kind: "mods", key: "", mods: { shift: false, alt: false, ctrl: false, meta: true }, mouseButton: 0 }, actionId: "103" },
-        { id: "p6", name: "Bookmark", trigger: { kind: "mods", key: "", mods: { shift: false, alt: false, ctrl: true, meta: false }, mouseButton: 0 }, actionId: "104" }
+        { id: "p2", name: "Copy", trigger: { kind: "key", key: "c", mods: { shift: false, alt: true, ctrl: false, meta: false }, mouseButton: 0 }, actionId: "102" },
+        { id: "p3", name: "Export", trigger: { kind: "key", key: "e", mods: { shift: false, alt: false, ctrl: false, meta: false }, mouseButton: 0 }, actionId: "103" },
+        { id: "p4", name: "Bookmark", trigger: { kind: "key", key: "b", mods: { shift: false, alt: false, ctrl: true, meta: false }, mouseButton: 0 }, actionId: "104" }
       ]
     };
     return defaults;
@@ -678,9 +671,158 @@ async function broadcastUpdatedSettings() {
   });
 }
 
+// 5-min in-memory cache for threat_analyze by URL
+const threatAnalyzeCache = new Map();
+const THREAT_CACHE_MS = 5 * 60 * 1000;
+
+function threatAnalyzeCacheGet(url) {
+  const entry = threatAnalyzeCache.get(url);
+  if (!entry || Date.now() > entry.expires) {
+    threatAnalyzeCache.delete(url);
+    return null;
+  }
+  return entry.payload;
+}
+
+function threatAnalyzeCacheSet(url, payload) {
+  threatAnalyzeCache.set(url, { payload, expires: Date.now() + THREAT_CACHE_MS });
+}
+
+async function handleThreatAnalyze(url) {
+  const normalized = (url || "").trim();
+  if (!normalized) return { error: "Missing url" };
+  if (!/^https?:\/\//i.test(normalized)) return { error: "Invalid url" };
+
+  const cached = threatAnalyzeCacheGet(normalized);
+  if (cached) return cached;
+
+  const { dontpokeApiKey } = await chrome.storage.local.get("dontpokeApiKey");
+  if (!dontpokeApiKey || typeof dontpokeApiKey !== "string") {
+    return { error: "Set dontpoke.me API key in Options" };
+  }
+
+  const apiUrl = "https://dontpoke.me/api/v1/trace";
+  const res = await fetch(apiUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-API-Key": dontpokeApiKey },
+    body: JSON.stringify({ url: normalized })
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = data?.error?.message || (res.status === 429 ? "Rate limited" : "Request failed (" + res.status + ")");
+    return { error: msg };
+  }
+
+  const redirects = Array.isArray(data.redirects) ? data.redirects.map((r) => (r && r.url) || r) : [];
+  const threatPills = Array.isArray(data.threatPills)
+    ? data.threatPills.map((p) => ({
+        label: p && p.label ? p.label : "Warning",
+        level: (p && p.severity) === "danger" ? "danger" : "warning"
+      }))
+    : [];
+  const payload = {
+    verdictText: data.verdictText || "Redirect chain traced.",
+    redirects,
+    threatPills,
+    isThreat: threatPills.length > 0
+  };
+  threatAnalyzeCacheSet(normalized, payload);
+  return payload;
+}
+
+// Email Domain Screener: https://dontpoke.me/api/v1/domain-screener
+// Input: email (a@b.com) or domain (example.com). Response: { ok, payload: { domain, summaryText, signals, pills } }.
+const domainScreenerCache = new Map();
+const DOMAIN_SCREENER_CACHE_MS = 5 * 60 * 1000;
+
+function normalizeScreenerInput(input) {
+  const raw = (input || "").trim();
+  if (!raw) return { type: null, value: "" };
+  const lower = raw.toLowerCase();
+  if (lower.includes("@")) return { type: "email", value: lower };
+  try {
+    if (/^https?:\/\//i.test(raw)) {
+      const u = new URL(raw);
+      return { type: "domain", value: u.hostname.replace(/^www\./i, "") || lower };
+    }
+    const domain = lower.replace(/^(https?|ftp):\/\//, "").replace(/^www\./, "").split("/")[0] || lower;
+    return { type: "domain", value: domain };
+  } catch (_) {
+    return { type: "domain", value: lower.replace(/^www\./i, "").split("/")[0] || lower };
+  }
+}
+
+async function handleDomainScreener(input) {
+  const normalized = normalizeScreenerInput(input);
+  const key = normalized.value || (input || "").trim();
+  if (!key) return { ok: false, error: "Enter a domain (e.g. example.com) or email (user@example.com)" };
+
+  const cached = domainScreenerCache.get(key);
+  if (cached && Date.now() < cached.expires) return { ok: true, payload: cached.payload };
+
+  const { dontpokeApiKey } = await chrome.storage.local.get("dontpokeApiKey");
+  if (!dontpokeApiKey || typeof dontpokeApiKey !== "string") {
+    return { ok: false, error: "Set dontpoke.me API key in Options" };
+  }
+
+  const apiUrl = "https://dontpoke.me/api/v1/domain-screener";
+  const body = normalized.type === "email" ? { email: normalized.value } : { domain: normalized.value };
+  const res = await fetch(apiUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-API-Key": dontpokeApiKey },
+    body: JSON.stringify(body)
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const code = data?.error?.code;
+    const msg = data?.error?.message || (res.status === 429 ? "Rate limited" : "Request failed (" + res.status + ")");
+    return { ok: false, error: code === "rate_limited" ? "Rate limited" : msg };
+  }
+
+  if (data.ok === false && data.error) {
+    return { ok: false, error: data.error.message || data.error.code || "Server error" };
+  }
+
+  const payload = data.payload || data;
+  if (payload && (payload.domain != null || payload.summaryText != null || Array.isArray(payload.signals))) {
+    domainScreenerCache.set(key, { payload, expires: Date.now() + DOMAIN_SCREENER_CACHE_MS });
+    return { ok: true, payload };
+  }
+  return { ok: false, error: "Invalid response" };
+}
+
 // In MV3, use chrome.runtime.onMessage
 // Note: In MV3, sendResponse must be called synchronously or return true to keep channel open
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.message === "threat_analyze") {
+    handleThreatAnalyze(request.url).then((result) => {
+      try {
+        if (sendResponse) sendResponse(result);
+      } catch (e) {
+        // Channel closed
+      }
+    }).catch((err) => {
+      try {
+        if (sendResponse) sendResponse({ error: err && err.message ? err.message : "Network or server error" });
+      } catch (e) {}
+    });
+    return true;
+  }
+  if (request.message === "domain_screener" || request.message === "domain_screen") {
+    const input = request.input != null ? request.input : (request.domain || request.url || "");
+    handleDomainScreener(input).then((result) => {
+      try {
+        if (sendResponse) sendResponse(result);
+      } catch (e) {}
+    }).catch((err) => {
+      try {
+        if (sendResponse) sendResponse({ ok: false, error: err && err.message ? err.message : "Network or server error" });
+      } catch (e) {}
+    });
+    return true;
+  }
   // handleRequests is async, so we need to handle it properly
   if (request.message === "init") {
     // For init messages, we need to send a response asynchronously
@@ -704,24 +846,22 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 });
 
-// Context menu: "Inspect with LinkSlinger" → open dontpoke.me link expander with URL
+// Context menu: "Expand link with Link Expander" — only for single http(s) links
 function setupContextMenu() {
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({
-      id: "linkslinger-inspect",
-      title: "Inspect with LinkSlinger",
+      id: "linkslinger-expand-link",
+      title: "Expand link with Link Expander",
       contexts: ["link"]
     });
   });
 }
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
-  if (info.menuItemId !== "linkslinger-inspect" || !info.linkUrl) return;
+  if (info.menuItemId !== "linkslinger-expand-link" || !info.linkUrl) return;
   const raw = info.linkUrl.trim();
+  // Only act on single http:// or https:// links
   if (!/^https?:\/\//i.test(raw)) {
-    if (typeof console !== "undefined" && console.warn) {
-      console.warn("LinkSlinger: Inspect skipped — only http/https links are supported.", raw.slice(0, 50));
-    }
     return;
   }
   const url = "https://dontpoke.me/tools/link-expander?url=" + encodeURIComponent(raw);

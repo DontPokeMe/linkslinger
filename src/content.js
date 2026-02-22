@@ -12,6 +12,7 @@ var setting = -1;
 var activeActionId = null;
 var key_pressed = 0;
 var heldKey = "";
+var heldMods = { shift: false, alt: false, ctrl: false, meta: false };
 var mouse_button = null;
 var stop_menu = false;
 var box_on = false;
@@ -39,30 +40,37 @@ var lateArmStartX = 0;
 var lateArmStartY = 0;
 var lateArmButton = LEFT_BUTTON;
 
-// QA only: set true to log activation state on mousedown (key capture / profile resolution). Do not enable in production.
-var DEBUG_ACTIVATION = false;
+// Debug Mode is controlled by settings.debugMode (Options → Advanced → Debug Mode).
 
-// Changed from chrome.extension.sendMessage to chrome.runtime.sendMessage
-chrome.runtime.sendMessage({
-  message: "init"
-}, function(response) {
+// Attach listeners immediately so selection works even if init callback is delayed (e.g. service worker cold start).
+function attachListeners() {
+  if (window.__linkslingerListenersAttached) return;
+  window.__linkslingerListenersAttached = true;
+  window.addEventListener("mousedown", mousedown, true);
+  window.addEventListener("keydown", keydown, true);
+  window.addEventListener("keyup", keyup, true);
+  window.addEventListener("blur", blur, true);
+  window.addEventListener("contextmenu", contextmenu, true);
+  document.addEventListener("keydown", keydown, true);
+  document.addEventListener("keyup", keyup, true);
+}
+attachListeners();
+
+chrome.runtime.sendMessage({ message: "init" }, function(response) {
   if (chrome.runtime.lastError) {
     console.error("LinkSlinger: Error loading settings:", chrome.runtime.lastError.message);
     return;
   }
-  
   if (response === null || response === undefined) {
-    console.error("Unable to load LinkSlinger due to null response");
+    console.error("LinkSlinger: Null response from init");
     return;
   }
-  
   if (response.hasOwnProperty("error")) {
-    console.error("Unable to properly load LinkSlinger, returning to default settings: " + JSON.stringify(response));
+    console.error("LinkSlinger: Init error:", response.error);
     return;
   }
-
   if (!response.actions || typeof response.actions !== "object") {
-    console.error("LinkSlinger: Invalid settings structure:", response);
+    console.error("LinkSlinger: Invalid settings structure");
     return;
   }
 
@@ -74,30 +82,14 @@ chrome.runtime.sendMessage({
   if (settings.blocked && Array.isArray(settings.blocked)) {
     for (var i in settings.blocked) {
       if (settings.blocked[i] === "") continue;
-      var re = new RegExp(settings.blocked[i], "i");
-      if (re.test(window.location.href)) {
-        allowed = false;
-        console.log("LinkSlinger is blocked on this site: " + settings.blocked[i] + "~" + window.location.href);
-      }
+      try {
+        var re = new RegExp(settings.blocked[i], "i");
+        if (re.test(window.location.href)) { allowed = false; break; }
+      } catch (e) { /* skip invalid regex */ }
     }
   }
-
   if (allowed && settings.actions) {
-    // Debug: log settings to verify they loaded
-    console.log("LinkSlinger: Settings loaded", settings);
-    console.log("LinkSlinger: Default key should be 90 (Z)");
-    
-    window.addEventListener("mousedown", mousedown, true);
-    window.addEventListener("keydown", keydown, true);
-    window.addEventListener("keyup", keyup, true);
-    window.addEventListener("blur", blur, true);
-    window.addEventListener("contextmenu", contextmenu, true);
-    
-    // Also listen on document for better key capture (capture phase)
-    document.addEventListener("keydown", keydown, true);
-    document.addEventListener("keyup", keyup, true);
-  } else {
-    console.log("LinkSlinger: Not initialized - allowed:", allowed, "settings:", settings);
+    console.log("LinkSlinger: Settings loaded");
   }
 });
 
@@ -134,24 +126,39 @@ function getActiveActionCfg() {
   return firstId ? settings.actions[firstId] : null;
 }
 
+function normalizeKeyForContent(k) {
+  if (typeof k !== "string") return "";
+  var s = k.trim().toLowerCase();
+  return s.length >= 1 ? s : "";
+}
+
 function triggerSigContent(t) {
   var btn = Number.isInteger(t.mouseButton) ? t.mouseButton : 0;
-  if (t.kind === "key") return "key:" + t.key + "|btn:" + btn;
   var m = t.mods || {};
-  return "mods:" + (+m.shift) + (+m.alt) + (+m.ctrl) + (+m.meta) + "|btn:" + btn;
+  var modStr = (+m.shift) + "" + (+m.alt) + (+m.ctrl) + (+m.meta);
+  if (t.kind === "key" && t.key) return "key:" + normalizeKeyForContent(t.key) + "|mods:" + modStr + "|btn:" + btn;
+  return "mods:" + modStr + "|btn:" + btn;
 }
 
 function resolveActiveActionId(mouseButton, e) {
   var profiles = Array.isArray(settings?.profiles) ? settings.profiles : [];
-  if (!profiles.length) return null;
+  var actions = settings?.actions;
+  if (!profiles.length) {
+    if (actions && Object.keys(actions).length > 0 && mouseButton === LEFT_BUTTON) {
+      return Object.keys(actions)[0];
+    }
+    return null;
+  }
   if (heldKey) {
-    var sig = "key:" + heldKey + "|btn:" + mouseButton;
+    var m = heldMods || {};
+    var modStr = (+m.shift) + "" + (+m.alt) + (+m.ctrl) + (+m.meta);
+    var sig = "key:" + heldKey + "|mods:" + modStr + "|btn:" + mouseButton;
     for (var i = 0; i < profiles.length; i++) {
       var p = profiles[i];
       if (p?.trigger && triggerSigContent(p.trigger) === sig && settings.actions?.[p.actionId]) return p.actionId;
     }
   }
-  // Also match modifier profiles when no modifier is held (mods:0000) so left-drag works when key never reached the page
+  // Match modifier-only profiles: Shift/Ctrl/Alt/Meta only active when set as part of a trigger.
   var mods = { shift: !!e.shiftKey, alt: !!e.altKey, ctrl: !!e.ctrlKey, meta: !!e.metaKey };
   var modSig = "mods:" + (+mods.shift) + (+mods.alt) + (+mods.ctrl) + (+mods.meta) + "|btn:" + mouseButton;
   for (var j = 0; j < profiles.length; j++) {
@@ -244,22 +251,20 @@ function clean_up() {
 }
 
 function resolveKeyTriggeredActionId(mouseButton) {
-  // Only key-trigger profiles (heldKey). No modifier triggers here.
   if (!settings || !settings.profiles || !settings.actions) return null;
 
   var hk = (heldKey || "").trim().toLowerCase();
-  if (!hk || hk.length !== 1) return null;
+  if (!hk) return null;
+
+  var m = heldMods || {};
+  var modStr = (+m.shift) + "" + (+m.alt) + (+m.ctrl) + (+m.meta);
+  var sig = "key:" + hk + "|mods:" + modStr + "|btn:" + mouseButton;
 
   for (var i = 0; i < settings.profiles.length; i++) {
     var p = settings.profiles[i];
     if (!p || !p.trigger || p.trigger.kind !== "key") continue;
-    var pk = String(p.trigger.key || "").trim().toLowerCase();
-    if (!pk || pk.length !== 1) continue;
-    if (pk !== hk) continue;
-
-    // key triggers also carry mouseButton in your schema; enforce it
+    if (triggerSigContent(p.trigger) !== sig) continue;
     if (typeof p.trigger.mouseButton === "number" && p.trigger.mouseButton !== mouseButton) continue;
-
     if (p.actionId && settings.actions[p.actionId]) return p.actionId;
   }
   return null;
@@ -315,9 +320,36 @@ function mousedown(event) {
     (target.closest && target.closest('input, textarea, [contenteditable="true"]'));
   if (isInputField) return;
 
+  if (!settings || !settings.actions) {
+    var ev = { pageX: event.pageX, pageY: event.pageY };
+    chrome.runtime.sendMessage({ message: "init" }, function(r) {
+      if (!r || r.error || !r.actions) return;
+      settings = r;
+      applySelectionColorFromSettings();
+      applyFilterFromSettings();
+      var firstId = Object.keys(settings.actions)[0];
+      // Only start selection if activation key is held (same rule as normal path).
+      if (firstId && ev && heldKey && heldKey !== "") {
+        activeActionId = resolveActiveActionId(mouse_button, event) || firstId;
+        applyFilterFromSettings(activeActionId);
+        if (os === OS_WIN) stop_menu = false;
+        startSelectionFromEvent(ev);
+      }
+    });
+    return;
+  }
+
   activeActionId = resolveActiveActionId(mouse_button, event);
 
-  if (DEBUG_ACTIVATION && typeof console !== "undefined" && console.log) {
+  // Key triggers require the key to be held; modifier-only profiles (Shift, Alt, etc.) do not.
+  if (activeActionId && settings && settings.profiles) {
+    var matchedProfile = settings.profiles.find(function (p) { return p.actionId === activeActionId; });
+    if (matchedProfile && matchedProfile.trigger && matchedProfile.trigger.kind === "key" && (!heldKey || heldKey === "")) {
+      activeActionId = null;
+    }
+  }
+
+  if (settings && settings.debugMode && typeof console !== "undefined" && console.log) {
     var profile = settings && settings.profiles ? settings.profiles.find(function (p) { return p.actionId === activeActionId; }) : null;
     console.log("LinkSlinger [QA] mousedown:", { heldKey: heldKey, eventKey: event.key, activeActionId: activeActionId, profileName: profile ? profile.name : null });
   }
@@ -377,13 +409,8 @@ function mousedown(event) {
 }
 
 function update_box(x, y) {
-  // Use page coordinates for fixed positioning
   var scrollX = window.pageXOffset || document.documentElement.scrollLeft;
   var scrollY = window.pageYOffset || document.documentElement.scrollTop;
-  
-  // Convert page coordinates to fixed viewport coordinates
-  var fixedX = x;
-  var fixedY = y;
 
   if (x > box.x) {
     box.x1 = box.x;
@@ -400,15 +427,15 @@ function update_box(x, y) {
     box.y2 = box.y;
   }
 
-  // Use fixed positioning (already set via CSS class)
-  box.style.left = box.x1 + "px";
+  // position:fixed uses viewport coordinates; event.pageX/pageY are document (page) coordinates.
+  // Convert page -> viewport so the box stays under the cursor when scrolling.
+  box.style.left = (box.x1 - scrollX) + "px";
   box.style.width = box.x2 - box.x1 + "px";
-  box.style.top = box.y1 + "px";
+  box.style.top = (box.y1 - scrollY) + "px";
   box.style.height = box.y2 - box.y1 + "px";
 
-  // Update tooltip position (offset by 12px as per spec)
-  count_label.style.left = (x + 12) + "px";
-  count_label.style.top = (y + 12) + "px";
+  count_label.style.left = (x - scrollX + 12) + "px";
+  count_label.style.top = (y - scrollY + 12) + "px";
 }
 
 function mousewheel() {
@@ -643,21 +670,28 @@ function detech(x, y, open) {
         });
       }
 
+      var scrollX = window.pageXOffset || document.documentElement.scrollLeft;
+      var scrollY = window.pageYOffset || document.documentElement.scrollTop;
+      var vpLeft = links[i].x1 - scrollX;
+      var vpTop = links[i].y1 - scrollY;
+
       if (links[i].box === null) {
         var link_box = document.createElement("span");
         link_box.style.id = "linkslinger-link";
         link_box.style.margin = "0px auto";
         link_box.style.border = "1px solid red";
-        link_box.style.position = "absolute";
+        link_box.style.position = "fixed";
         link_box.style.width = links[i].width + "px";
         link_box.style.height = links[i].height + "px";
-        link_box.style.top = links[i].y1 + "px";
-        link_box.style.left = links[i].x1 + "px";
+        link_box.style.top = vpTop + "px";
+        link_box.style.left = vpLeft + "px";
         link_box.style.zIndex = Z_INDEX;
 
         document.body.appendChild(link_box);
         links[i].box = link_box;
       } else {
+        links[i].box.style.left = vpLeft + "px";
+        links[i].box.style.top = vpTop + "px";
         links[i].box.style.visibility = "visible";
       }
 
@@ -719,7 +753,10 @@ function keydown(event) {
   
   if (event.keyCode !== END_KEYCODE && event.keyCode !== HOME_KEYCODE) {
     key_pressed = event.keyCode;
-    if (!event.repeat && typeof event.key === "string" && event.key.length === 1) heldKey = event.key.toLowerCase();
+    if (!event.repeat && typeof event.key === "string" && event.key.length >= 1) {
+      heldKey = normalizeKeyForContent(event.key);
+      heldMods = { shift: !!event.shiftKey, alt: !!event.altKey, ctrl: !!event.ctrlKey, meta: !!event.metaKey };
+    }
     if (os === OS_LINUX && allow_key(key_pressed)) stop_menu = true;
   } else {
     scroll_bug_ignore = true;
@@ -743,7 +780,10 @@ function keyup(event) {
   }
   
   if (event.keyCode !== END_KEYCODE && event.keyCode !== HOME_KEYCODE) {
-    if (typeof event.key === "string" && event.key.length === 1 && event.key.toLowerCase() === heldKey) heldKey = "";
+    if (typeof event.key === "string" && event.key.length >= 1 && normalizeKeyForContent(event.key) === heldKey) {
+      heldKey = "";
+      heldMods = { shift: false, alt: false, ctrl: false, meta: false };
+    }
     remove_key();
   }
 }
@@ -755,6 +795,9 @@ function remove_key() {
 
 function allow_selection() {
   if (box_on) return true;
+  // During initial drag, box exists but box_on is still false until detech() calls start() (after 5px).
+  // Allow mousemove to update the box and run detech instead of calling stop().
+  if (box !== null) return true;
   return false;
 }
 

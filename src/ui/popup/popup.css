@@ -150,6 +150,86 @@ body {
   height: 20px;
 }
 
+/* ——— Tabs ——— */
+.popup-tabs {
+  display: flex;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 0 var(--spacing-md);
+  gap: 2px;
+}
+
+.popup-tab {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 10px 14px;
+  margin-bottom: -1px;
+  cursor: pointer;
+  transition: color 0.15s ease-in-out, border-color 0.15s ease-in-out;
+}
+
+.popup-tab:hover {
+  color: var(--text-primary);
+}
+
+.popup-tab.active {
+  color: var(--accent-primary);
+  border-bottom-color: var(--accent-primary);
+}
+
+.tab-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.tab-panel.hidden {
+  display: none;
+}
+
+/* ——— Settings panel ——— */
+.settings-panel {
+  padding: var(--spacing-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.settings-intro {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.btn-open-settings {
+  width: 100%;
+  padding: 10px var(--spacing-md);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+  background: var(--accent-primary);
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+.btn-open-settings:hover {
+  background: var(--accent-hover);
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+
+.settings-version {
+  font-size: 11px;
+  color: var(--text-secondary);
+  opacity: 0.8;
+}
+
 /* ——— B. Main ——— */
 .popup-main {
   padding: var(--spacing-md);
@@ -263,22 +343,35 @@ body {
   gap: var(--spacing-sm);
 }
 
-.verdict-banner.clean {
+.verdict-banner.clean,
+.verdict-banner.allow {
   border-color: var(--success-border);
   color: var(--success);
 }
 
-.verdict-banner.clean .verdict-icon::before {
+.verdict-banner.clean .verdict-icon::before,
+.verdict-banner.allow .verdict-icon::before {
   content: "✓";
   font-weight: bold;
 }
 
-.verdict-banner.threat {
+.verdict-banner.review {
+  border-color: rgba(234, 179, 8, 0.8);
+  color: #eab308;
+}
+
+.verdict-banner.review .verdict-icon::before {
+  content: "◐";
+}
+
+.verdict-banner.threat,
+.verdict-banner.block {
   border-color: var(--danger-border);
   color: var(--danger);
 }
 
-.verdict-banner.threat .verdict-icon::before {
+.verdict-banner.threat .verdict-icon::before,
+.verdict-banner.block .verdict-icon::before {
   content: "⚠";
 }
 
@@ -299,6 +392,24 @@ body {
   letter-spacing: 0.5px;
   color: var(--text-secondary);
   margin-bottom: var(--spacing-xs);
+}
+
+.card-message {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.card-details {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 180px;
+  overflow: auto;
 }
 
 .redirect-list {

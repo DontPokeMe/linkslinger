@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "LinkSlinger",
-  "version": "3.2.0",
+  "version": "4.0.0",
   "description": "Select, open, copy, or bookmark multiple links at once. Part of the dontpoke.me toolkit.",
 
   "action": {
@@ -44,12 +44,7 @@
     "contextMenus"
   ],
   "host_permissions": [
-    "<all_urls>"
-  ],
-  "web_accessible_resources": [
-    {
-      "resources": ["pages/test_area.html"],
-      "matches": ["<all_urls>"]
-    }
+    "<all_urls>",
+    "https://dontpoke.me/*"
   ]
 }
