@@ -147,6 +147,20 @@ To enable automatic publishing to Chrome Web Store:
 - Ensure OAuth credentials are valid
 - Refresh token may need regeneration
 
+**"Unauthorized" / unauthorized_client:** Regenerate refresh token via [OAuth 2.0 Playground](https://developers.google.com/oauthplayground/): use your own credentials, scope `https://www.googleapis.com/auth/chromewebstore`, authorize, exchange for tokens, copy `refresh_token`. Update GitHub secret `CHROME_REFRESH_TOKEN`. Ensure redirect URI `https://developers.google.com/oauthplayground` is added in Google Cloud Console → Credentials → your OAuth client.
+
+**redirect_uri_mismatch:** In Google Cloud Console → APIs & Services → Credentials → your OAuth 2.0 Client ID, add Authorized redirect URI: `https://developers.google.com/oauthplayground`. Save and retry.
+
+---
+
+## Offscreen permission (Chrome Web Store justification)
+
+**Permission:** `offscreen`
+
+**Justification:** Required for clipboard copy in Manifest V3. Service workers cannot use `navigator.clipboard.writeText()`. The offscreen document provides a DOM context for clipboard operations. Used only when the user chooses "Copy" action; no user data stored or transmitted. This is the recommended Chrome MV3 pattern for clipboard access.
+
+---
+
 ## Build Artifacts
 
 ### On Every Push to Main

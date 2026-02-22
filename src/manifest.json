@@ -40,14 +40,15 @@
     "storage",
     "scripting",
     "clipboardWrite",
-    "offscreen"
+    "offscreen",
+    "contextMenus"
   ],
   "host_permissions": [
     "<all_urls>"
   ],
   "web_accessible_resources": [
     {
-      "resources": ["assets/fonts/*", "pages/test_area.html"],
+      "resources": ["pages/test_area.html"],
       "matches": ["<all_urls>"]
     }
   ]

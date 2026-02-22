@@ -3,40 +3,77 @@
  ********************/
 
 const CURRENT_VERSION = "5";
+/** Schema version of the settings object; bump on migrations. */
+const SETTINGS_SCHEMA_VERSION = 1;
 
 class SettingsManager {
-  // Use a constructor to hold an in-memory cache, if desired
   constructor() {
-    this._cache = null; // optional: store the last loaded settings in memory
+    this._cache = null;
     this._version = null;
   }
 
-  // Load settings + version from chrome.storage.local
-  // Returns a Promise that resolves with the settings object
+  /**
+   * Normalize settings: fill defaults, migrate old keys, remove invalid values.
+   * Prevents schema drift and partial-write breakage. Always read-modify-write
+   * the full settings object; use this before save and after load.
+   */
+  normalizeSettings(settings) {
+    if (!settings || typeof settings !== "object") {
+      return this.initDefaults();
+    }
+    const out = {
+      version: typeof settings.version === "number" ? settings.version : SETTINGS_SCHEMA_VERSION,
+      actions: typeof settings.actions === "object" && settings.actions !== null ? { ...settings.actions } : {},
+      blocked: Array.isArray(settings.blocked) ? settings.blocked.filter(b => typeof b === "string") : []
+    };
+    const defaultAction = this.initDefaults().actions["101"];
+    for (const id of Object.keys(out.actions)) {
+      const a = out.actions[id];
+      if (!a || typeof a !== "object") {
+        delete out.actions[id];
+        continue;
+      }
+      out.actions[id] = {
+        mouse: typeof a.mouse === "number" ? a.mouse : defaultAction.mouse,
+        key: typeof a.key === "number" ? a.key : defaultAction.key,
+        action: ["tabs", "win", "copy", "bm"].includes(a.action) ? a.action : defaultAction.action,
+        color: typeof a.color === "string" && /^#[0-9A-Fa-f]{6}$/.test(a.color) ? a.color : defaultAction.color,
+        options: {
+          smart: a.options && (a.options.smart === 0 || a.options.smart === 1) ? a.options.smart : defaultAction.options.smart,
+          ignore: Array.isArray(a.options && a.options.ignore) ? a.options.ignore : defaultAction.options.ignore,
+          delay: typeof (a.options && a.options.delay) === "number" ? a.options.delay : defaultAction.options.delay,
+          close: typeof (a.options && a.options.close) === "number" ? a.options.close : defaultAction.options.close,
+          block: typeof (a.options && a.options.block) === "boolean" ? a.options.block : defaultAction.options.block,
+          reverse: typeof (a.options && a.options.reverse) === "boolean" ? a.options.reverse : defaultAction.options.reverse,
+          end: typeof (a.options && a.options.end) === "boolean" ? a.options.end : defaultAction.options.end
+        }
+      };
+    }
+    if (Object.keys(out.actions).length === 0) {
+      out.actions = { "101": defaultAction };
+    }
+    return out;
+  }
+
   async load() {
     const data = await this._getStorageData(["settings", "version"]);
     this._version = data.version;
     if (data.settings) {
-      this._cache = data.settings;
+      this._cache = this.normalizeSettings(data.settings);
       return this._cache;
-    } else {
-      // If not found, initialize defaults
-      const defaults = this.initDefaults();
-      await this.save(defaults);
-      return defaults;
     }
+    const defaults = this.initDefaults();
+    await this.save(defaults);
+    return defaults;
   }
 
-  // Save the provided settings to chrome.storage.local
   async save(settings) {
-    // remove any error messages from the object if needed
     if (settings && settings.error) {
       delete settings.error;
     }
-
-    // store them
-    await this._setStorageData({ settings });
-    this._cache = settings;
+    const normalized = this.normalizeSettings(settings);
+    await this._setStorageData({ settings: normalized });
+    this._cache = normalized;
   }
 
   // Check if we have a "version" in storage to see if it’s "initialized"
@@ -51,31 +88,28 @@ class SettingsManager {
     return data.version === CURRENT_VERSION;
   }
 
-  // Initialize the default settings object
-  // This does NOT automatically persist them
   initDefaults() {
-    // same object you had in your old init() method
     const defaults = {
-      "actions": {
+      version: SETTINGS_SCHEMA_VERSION,
+      actions: {
         "101": {
-          "mouse": 0,  // left mouse button
-          "key": 90,   // z key
-          "action": "tabs",
-          "color": "#FFA500",
-          "options": {
-            "smart": 0,
-            "ignore": [0],
-            "delay": 0,
-            "close": 0,
-            "block": true,
-            "reverse": false,
-            "end": false
+          mouse: 0,
+          key: 90,
+          action: "tabs",
+          color: "#FFA500",
+          options: {
+            smart: 0,
+            ignore: [0],
+            delay: 0,
+            close: 0,
+            block: true,
+            reverse: false,
+            end: false
           }
         }
       },
-      "blocked": []
+      blocked: []
     };
-
     return defaults;
   }
 
@@ -102,8 +136,9 @@ class SettingsManager {
     // If we’re behind the CURRENT_VERSION, fill in any needed fields
     const data = await this._getStorageData(["settings", "version"]);
     if (data.version !== CURRENT_VERSION) {
-      // do your migration logic here, or just re-init
-      await this._setStorageData({ version: CURRENT_VERSION });
+      const normalized = this.normalizeSettings(data.settings);
+      await this._setStorageData({ settings: normalized, version: CURRENT_VERSION });
+      this._cache = normalized;
     }
   }
 
@@ -437,8 +472,27 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 });
 
+// Context menu: "Inspect with LinkSlinger" → open dontpoke.me link expander with URL
+function setupContextMenu() {
+  chrome.contextMenus.removeAll(() => {
+    chrome.contextMenus.create({
+      id: "linkslinger-inspect",
+      title: "Inspect with LinkSlinger",
+      contexts: ["link"]
+    });
+  });
+}
+
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  if (info.menuItemId === "linkslinger-inspect" && info.linkUrl) {
+    const url = "https://dontpoke.me/tools/link-expander?url=" + encodeURIComponent(info.linkUrl);
+    chrome.tabs.create({ url });
+  }
+});
+
 // On startup, do an async check for initialization or updates
 (async function initExtension() {
+  setupContextMenu();
   if (!await settingsManager.isInit()) {
     console.log("Settings not initialized, setting defaults...");
     await settingsManager.init();
