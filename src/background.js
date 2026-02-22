@@ -554,11 +554,14 @@ async function handleRequests(request, sender, sendResponse) {
       }
       return currentSettings;
 
-    case "update":
-      // Save new settings, then broadcast them to all tabs
-      await settingsManager.save(request.settings);
+    case "update": {
+      // Never store or broadcast raw settings: normalize first so trigger.key is always lowercase
+      const normalized = settingsManager.normalizeSettings(request.settings);
+      await settingsManager._setStorageData({ settings: normalized });
+      settingsManager._cache = normalized;
       broadcastUpdatedSettings();
       break;
+    }
   }
 }
 

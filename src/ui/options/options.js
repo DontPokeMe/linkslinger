@@ -243,10 +243,14 @@ async function saveProfiles() {
       const name = nameInput.value.trim() || 'Profile ' + (idx + 1);
       const trigger = getTriggerByValue(triggerSelect.value);
       const actionId = actionIds.includes(actionSelect.value) ? actionSelect.value : actionIds[0] || '101';
+      // Ensure key trigger is stored lowercase so content script (heldKey) matches
+      const safeTrigger = trigger.kind === 'key'
+        ? { ...trigger, key: String(trigger.key || 'z').toLowerCase() }
+        : { ...trigger };
       profiles.push({
         id: 'p' + (idx + 1),
         name,
-        trigger: { ...trigger },
+        trigger: safeTrigger,
         actionId
       });
     });

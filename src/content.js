@@ -32,6 +32,13 @@ var scroll_bug_ignore = false;
 var os = ((navigator.appVersion.indexOf("Win") === -1) ? OS_LINUX : OS_WIN);
 var timer = 0;
 
+// Late-arm support (key trigger only)
+var mouseIsDown = false;
+var lateArmTimer = 0;
+var lateArmStartX = 0;
+var lateArmStartY = 0;
+var lateArmButton = LEFT_BUTTON;
+
 // Changed from chrome.extension.sendMessage to chrome.runtime.sendMessage
 chrome.runtime.sendMessage({
   message: "init"
@@ -95,6 +102,10 @@ chrome.runtime.sendMessage({
 chrome.runtime.onMessage.addListener(function(request, sender, callback) {
   if (request.message === "update") {
     settings = request.settings;
+    // QA: verify normalized profiles reach content script (remove for release)
+    if (typeof console !== "undefined" && console.log) {
+      console.log("LinkSlinger settings.profiles", settings.profiles);
+    }
     applySelectionColorFromSettings();
     applyFilterFromSettings();
     if (box) {
@@ -230,21 +241,121 @@ function clean_up() {
   key_pressed = 0;
 }
 
+function resolveKeyTriggeredActionId(mouseButton) {
+  // Only key-trigger profiles (heldKey). No modifier triggers here.
+  if (!settings || !settings.profiles || !settings.actions) return null;
+
+  var hk = (heldKey || "").trim().toLowerCase();
+  if (!hk || hk.length !== 1) return null;
+
+  for (var i = 0; i < settings.profiles.length; i++) {
+    var p = settings.profiles[i];
+    if (!p || !p.trigger || p.trigger.kind !== "key") continue;
+    var pk = String(p.trigger.key || "").trim().toLowerCase();
+    if (!pk || pk.length !== 1) continue;
+    if (pk !== hk) continue;
+
+    // key triggers also carry mouseButton in your schema; enforce it
+    if (typeof p.trigger.mouseButton === "number" && p.trigger.mouseButton !== mouseButton) continue;
+
+    if (p.actionId && settings.actions[p.actionId]) return p.actionId;
+  }
+  return null;
+}
+
+function startSelectionFromEvent(event) {
+  // This is the "else" block of your current mousedown, extracted as a function.
+  if (box_on) clean_up();
+
+  var actionCfg = settings.actions[activeActionId];
+  var boxColor = normalizeHexColor(actionCfg && actionCfg.color ? actionCfg.color : currentSelectionColor);
+
+  if (box === null) {
+    box = document.createElement("span");
+    box.className = "linkslinger-selection-box";
+    box.style.visibility = "hidden";
+    box.style.setProperty("--ls-box-color", boxColor);
+
+    count_label = document.createElement("span");
+    count_label.className = "linkslinger-tooltip";
+    count_label.style.visibility = "hidden";
+    count_label.style.setProperty("--ls-box-color", boxColor);
+
+    document.body.appendChild(box);
+    document.body.appendChild(count_label);
+  } else {
+    box.style.setProperty("--ls-box-color", boxColor);
+    if (count_label) count_label.style.setProperty("--ls-box-color", boxColor);
+  }
+
+  box.x = event.pageX;
+  box.y = event.pageY;
+  update_box(event.pageX, event.pageY);
+
+  window.addEventListener("mousemove", mousemove, true);
+  window.addEventListener("mouseup", mouseup, true);
+  window.addEventListener("mousewheel", mousewheel, true);
+  window.addEventListener("mouseout", mouseout, true);
+}
+
 function mousedown(event) {
   mouse_button = event.button;
+  mouseIsDown = true;
+  lateArmButton = mouse_button;
+  lateArmStartX = event.pageX;
+  lateArmStartY = event.pageY;
 
   var target = event.target;
-  var isInputField = target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable ||
-    (target.closest && target.closest("input, textarea, [contenteditable=\"true\"]"));
+  var isInputField =
+    target.tagName === "INPUT" ||
+    target.tagName === "TEXTAREA" ||
+    target.isContentEditable ||
+    (target.closest && target.closest('input, textarea, [contenteditable="true"]'));
   if (isInputField) return;
 
   activeActionId = resolveActiveActionId(mouse_button, event);
-  if (!activeActionId) return;
 
+  // Late-arm: key trigger only (e.g., user presses Z after mouse down).
+  // If no match at mousedown, wait up to 250ms for heldKey to become valid.
+  if (!activeActionId) {
+    if (lateArmTimer) {
+      clearTimeout(lateArmTimer);
+      lateArmTimer = 0;
+    }
+
+    lateArmTimer = setTimeout(function () {
+      lateArmTimer = 0;
+      // If mouse is no longer down, abort.
+      if (!mouseIsDown) return;
+      // Only key trigger profiles
+      var keyActionId = resolveKeyTriggeredActionId(lateArmButton);
+      if (!keyActionId) return;
+
+      activeActionId = keyActionId;
+      applyFilterFromSettings(activeActionId);
+
+      // Replicate the minimal side effects from the normal path
+      if (os === OS_WIN) stop_menu = false;
+      if (os === OS_LINUX || (os === OS_WIN && lateArmButton === LEFT_BUTTON)) {
+        // Use original mousedown location for escalation prevention consistency.
+        // We don't have the original event object here, so only prevent further escalation by disabling menu.
+        // The selection will still work normally.
+      }
+
+      // Start selection anchored at original mousedown coords
+      startSelectionFromEvent({
+        pageX: lateArmStartX,
+        pageY: lateArmStartY
+      });
+    }, 250);
+
+    return;
+  }
+
+  // Normal path (unchanged behavior)
   applyFilterFromSettings(activeActionId);
 
   if (os === OS_WIN) stop_menu = false;
-
   if (os === OS_LINUX || (os === OS_WIN && mouse_button === LEFT_BUTTON)) {
     prevent_escalation(event);
   }
@@ -254,33 +365,7 @@ function mousedown(event) {
     timer = 0;
     if (os === OS_WIN) stop_menu = true;
   } else {
-    if (box_on) clean_up();
-
-    var actionCfg = settings.actions[activeActionId];
-    var boxColor = normalizeHexColor(actionCfg && actionCfg.color ? actionCfg.color : currentSelectionColor);
-    if (box === null) {
-      box = document.createElement("span");
-      box.className = "linkslinger-selection-box";
-      box.style.visibility = "hidden";
-      box.style.setProperty("--ls-box-color", boxColor);
-      count_label = document.createElement("span");
-      count_label.className = "linkslinger-tooltip";
-      count_label.style.visibility = "hidden";
-      count_label.style.setProperty("--ls-box-color", boxColor);
-      document.body.appendChild(box);
-      document.body.appendChild(count_label);
-    } else {
-      box.style.setProperty("--ls-box-color", boxColor);
-      if (count_label) count_label.style.setProperty("--ls-box-color", boxColor);
-    }
-
-    box.x = event.pageX;
-    box.y = event.pageY;
-    update_box(event.pageX, event.pageY);
-    window.addEventListener("mousemove", mousemove, true);
-    window.addEventListener("mouseup", mouseup, true);
-    window.addEventListener("mousewheel", mousewheel, true);
-    window.addEventListener("mouseout", mouseout, true);
+    startSelectionFromEvent(event);
   }
 }
 
@@ -335,6 +420,12 @@ function prevent_escalation(event) {
 }
 
 function mouseup(event) {
+  mouseIsDown = false;
+  if (lateArmTimer) {
+    clearTimeout(lateArmTimer);
+    lateArmTimer = 0;
+  }
+
   prevent_escalation(event);
 
   if (box_on) {
