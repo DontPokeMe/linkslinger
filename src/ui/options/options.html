@@ -43,14 +43,17 @@
               Only select links matching (include) or not matching (exclude) this pattern. Leave empty to select all.
             </p>
             <input type="text" id="filterPattern" class="setting-input" placeholder="e.g. \.pdf$ or /blog/">
-            <select id="filterMode" class="setting-input" style="margin-top: 8px; max-width: 12rem;">
-              <option value="exclude">Exclude matching</option>
-              <option value="include">Include only matching</option>
-            </select>
-            <label class="checkbox-label" style="margin-top: 8px; display: inline-flex; align-items: center; gap: 8px;">
-              <input type="checkbox" id="filterCaseInsensitive" checked>
-              Case-insensitive
-            </label>
+            <div class="filter-mode-row">
+              <select id="filterMode" class="setting-input" style="max-width: 12rem;">
+                <option value="exclude">Exclude matching</option>
+                <option value="include">Include only matching</option>
+              </select>
+              <label class="toggle-switch-label" for="filterCaseInsensitive">
+                <input type="checkbox" id="filterCaseInsensitive" class="toggle-switch-input" checked>
+                <span class="toggle-switch-slider" aria-hidden="true"></span>
+                <span class="toggle-switch-text">Case-insensitive</span>
+              </label>
+            </div>
             <p id="filterPatternError" class="filter-error" role="alert" aria-live="polite" hidden>Invalid regular expression syntax.</p>
           </div>
           <hr class="advanced-divider" aria-hidden="true">
@@ -63,9 +66,10 @@
           </div>
           <hr class="advanced-divider" aria-hidden="true">
           <div class="setting-group">
-            <label class="setting-label">
-              <input type="checkbox" id="debugMode">
-              Debug Mode
+            <label class="toggle-switch-label" for="debugMode">
+              <input type="checkbox" id="debugMode" class="toggle-switch-input">
+              <span class="toggle-switch-slider" aria-hidden="true"></span>
+              <span class="toggle-switch-text">Debug Mode</span>
             </label>
             <p class="setting-description">
               Log activation state (key, profile) on mousedown in the console. Use for troubleshooting selection.
@@ -151,7 +155,7 @@
               <a href="https://dontpoke.me/tools/linkslinger" target="_blank" rel="noopener noreferrer" class="link-button glass-button">Visit Website</a>
               <a href="https://github.com/DontPokeMe/linkslinger" target="_blank" rel="noopener noreferrer" class="link-button glass-button">View on GitHub</a>
             </div>
-            <span class="version-info">v4.0.3</span>
+            <span class="version-info">v4.0.4</span>
           </div>
           </div>
         </div>

@@ -123,27 +123,36 @@ function validateFilterPattern() {
   saveBtn.disabled = !valid;
 }
 
+// Activate a section by id (settings, advanced, about); used for nav clicks and initial hash
+function activateSection(sectionId) {
+  const navItems = document.querySelectorAll('.nav-item');
+  const sections = document.querySelectorAll('.settings-section');
+  navItems.forEach((nav) => {
+    const target = nav.getAttribute('data-section');
+    nav.classList.toggle('active', target === sectionId);
+  });
+  sections.forEach((section) => {
+    section.classList.toggle('active', section.id === sectionId);
+  });
+}
+
 // Navigation handling
 document.addEventListener('DOMContentLoaded', () => {
   const navItems = document.querySelectorAll('.nav-item');
   const sections = document.querySelectorAll('.settings-section');
 
+  // Open to hash section if present (e.g. #about for new installs)
+  const hash = (window.location.hash || '').replace(/^#/, '');
+  if (hash && document.getElementById(hash)) {
+    activateSection(hash);
+  }
+
   navItems.forEach(item => {
     item.addEventListener('click', (e) => {
       e.preventDefault();
-      
-      // Remove active class from all nav items and sections
-      navItems.forEach(nav => nav.classList.remove('active'));
-      sections.forEach(section => section.classList.remove('active'));
-      
-      // Add active class to clicked nav item
-      item.classList.add('active');
-      
-      // Show corresponding section
       const sectionId = item.getAttribute('data-section');
-      const targetSection = document.getElementById(sectionId);
-      if (targetSection) {
-        targetSection.classList.add('active');
+      if (sectionId) {
+        activateSection(sectionId);
       }
     });
   });
@@ -350,14 +359,21 @@ function createProfileCard(p, idx, actions, gridEl) {
     actionTypeSelect.appendChild(o);
   });
   const smartLabel = document.createElement('label');
-  smartLabel.className = 'smart-label';
+  smartLabel.className = 'toggle-switch-label smart-label';
   const smartCheckbox = document.createElement('input');
   smartCheckbox.type = 'checkbox';
-  smartCheckbox.className = 'smart-checkbox';
+  smartCheckbox.className = 'toggle-switch-input smart-checkbox';
   smartCheckbox.checked = profileAction && profileAction.options && profileAction.options.smart === 1;
   smartCheckbox.setAttribute('aria-label', 'Smart selection');
+  const smartSlider = document.createElement('span');
+  smartSlider.className = 'toggle-switch-slider';
+  smartSlider.setAttribute('aria-hidden', 'true');
+  const smartText = document.createElement('span');
+  smartText.className = 'toggle-switch-text';
+  smartText.textContent = 'Smart selection';
   smartLabel.appendChild(smartCheckbox);
-  smartLabel.appendChild(document.createTextNode(' Smart selection'));
+  smartLabel.appendChild(smartSlider);
+  smartLabel.appendChild(smartText);
 
   card.dataset.actionId = p.actionId || '';
 

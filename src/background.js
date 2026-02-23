@@ -898,13 +898,9 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
       });
     });
 
-    // Open options page for new user
-    const optionsUrl = chrome.runtime.getURL("ui/options/options.html?init=true");
-    chrome.windows.create({
-      url: optionsUrl,
-      width: 900,
-      height: 700
-    });
+    // Open options page in a new tab so new users can set their settings (About section first)
+    const optionsUrl = chrome.runtime.getURL("ui/options/options.html#about");
+    chrome.tabs.create({ url: optionsUrl });
   } else if (!await settingsManager.isLatest()) {
     console.log("Settings version mismatch, performing update...");
     await settingsManager.update();
