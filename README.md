@@ -63,8 +63,6 @@ No build step required.
 
 The extension runs directly from source in `src/`.
 
-If bundling or packaging is added later, document it here.
-
 ---
 
 ## Configuration
