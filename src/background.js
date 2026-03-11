@@ -536,9 +536,6 @@ async function handleBookmarkAction(urls) {
     existingSet.add(url);
   }
 
-  if (typeof console !== "undefined" && console.log) {
-    console.log("LinkSlinger: Bookmark action — added:", added, "skipped:", skipped, "total:", safe.length);
-  }
   return { added, skipped, total: safe.length };
 }
 
@@ -572,7 +569,7 @@ async function handleRequests(request, sender, sendResponse) {
         }
         case "bm": {
           const result = await handleBookmarkAction(request.urls);
-          if (typeof console !== "undefined" && console.log) {
+          if (currentSettings.debugMode && typeof console !== "undefined" && console.log) {
             console.log("LinkSlinger: Bookmark —", result.added, "added,", result.skipped, "skipped");
           }
           break;
@@ -621,7 +618,7 @@ async function handleRequests(request, sender, sendResponse) {
           });
           break;
         case "export":
-          if (typeof console !== "undefined" && console.log) {
+          if (currentSettings.debugMode && typeof console !== "undefined" && console.log) {
             console.log("LinkSlinger: Export (stub) —", request.urls.length, "links. Sprint 2C will add downloads.");
           }
           break;
@@ -671,158 +668,9 @@ async function broadcastUpdatedSettings() {
   });
 }
 
-// 5-min in-memory cache for threat_analyze by URL
-const threatAnalyzeCache = new Map();
-const THREAT_CACHE_MS = 5 * 60 * 1000;
-
-function threatAnalyzeCacheGet(url) {
-  const entry = threatAnalyzeCache.get(url);
-  if (!entry || Date.now() > entry.expires) {
-    threatAnalyzeCache.delete(url);
-    return null;
-  }
-  return entry.payload;
-}
-
-function threatAnalyzeCacheSet(url, payload) {
-  threatAnalyzeCache.set(url, { payload, expires: Date.now() + THREAT_CACHE_MS });
-}
-
-async function handleThreatAnalyze(url) {
-  const normalized = (url || "").trim();
-  if (!normalized) return { error: "Missing url" };
-  if (!/^https?:\/\//i.test(normalized)) return { error: "Invalid url" };
-
-  const cached = threatAnalyzeCacheGet(normalized);
-  if (cached) return cached;
-
-  const { dontpokeApiKey } = await chrome.storage.local.get("dontpokeApiKey");
-  if (!dontpokeApiKey || typeof dontpokeApiKey !== "string") {
-    return { error: "Set dontpoke.me API key in Options" };
-  }
-
-  const apiUrl = "https://dontpoke.me/api/v1/trace";
-  const res = await fetch(apiUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-API-Key": dontpokeApiKey },
-    body: JSON.stringify({ url: normalized })
-  });
-
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const msg = data?.error?.message || (res.status === 429 ? "Rate limited" : "Request failed (" + res.status + ")");
-    return { error: msg };
-  }
-
-  const redirects = Array.isArray(data.redirects) ? data.redirects.map((r) => (r && r.url) || r) : [];
-  const threatPills = Array.isArray(data.threatPills)
-    ? data.threatPills.map((p) => ({
-        label: p && p.label ? p.label : "Warning",
-        level: (p && p.severity) === "danger" ? "danger" : "warning"
-      }))
-    : [];
-  const payload = {
-    verdictText: data.verdictText || "Redirect chain traced.",
-    redirects,
-    threatPills,
-    isThreat: threatPills.length > 0
-  };
-  threatAnalyzeCacheSet(normalized, payload);
-  return payload;
-}
-
-// Email Domain Screener: https://dontpoke.me/api/v1/domain-screener
-// Input: email (a@b.com) or domain (example.com). Response: { ok, payload: { domain, summaryText, signals, pills } }.
-const domainScreenerCache = new Map();
-const DOMAIN_SCREENER_CACHE_MS = 5 * 60 * 1000;
-
-function normalizeScreenerInput(input) {
-  const raw = (input || "").trim();
-  if (!raw) return { type: null, value: "" };
-  const lower = raw.toLowerCase();
-  if (lower.includes("@")) return { type: "email", value: lower };
-  try {
-    if (/^https?:\/\//i.test(raw)) {
-      const u = new URL(raw);
-      return { type: "domain", value: u.hostname.replace(/^www\./i, "") || lower };
-    }
-    const domain = lower.replace(/^(https?|ftp):\/\//, "").replace(/^www\./, "").split("/")[0] || lower;
-    return { type: "domain", value: domain };
-  } catch (_) {
-    return { type: "domain", value: lower.replace(/^www\./i, "").split("/")[0] || lower };
-  }
-}
-
-async function handleDomainScreener(input) {
-  const normalized = normalizeScreenerInput(input);
-  const key = normalized.value || (input || "").trim();
-  if (!key) return { ok: false, error: "Enter a domain (e.g. example.com) or email (user@example.com)" };
-
-  const cached = domainScreenerCache.get(key);
-  if (cached && Date.now() < cached.expires) return { ok: true, payload: cached.payload };
-
-  const { dontpokeApiKey } = await chrome.storage.local.get("dontpokeApiKey");
-  if (!dontpokeApiKey || typeof dontpokeApiKey !== "string") {
-    return { ok: false, error: "Set dontpoke.me API key in Options" };
-  }
-
-  const apiUrl = "https://dontpoke.me/api/v1/domain-screener";
-  const body = normalized.type === "email" ? { email: normalized.value } : { domain: normalized.value };
-  const res = await fetch(apiUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-API-Key": dontpokeApiKey },
-    body: JSON.stringify(body)
-  });
-
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const code = data?.error?.code;
-    const msg = data?.error?.message || (res.status === 429 ? "Rate limited" : "Request failed (" + res.status + ")");
-    return { ok: false, error: code === "rate_limited" ? "Rate limited" : msg };
-  }
-
-  if (data.ok === false && data.error) {
-    return { ok: false, error: data.error.message || data.error.code || "Server error" };
-  }
-
-  const payload = data.payload || data;
-  if (payload && (payload.domain != null || payload.summaryText != null || Array.isArray(payload.signals))) {
-    domainScreenerCache.set(key, { payload, expires: Date.now() + DOMAIN_SCREENER_CACHE_MS });
-    return { ok: true, payload };
-  }
-  return { ok: false, error: "Invalid response" };
-}
-
 // In MV3, use chrome.runtime.onMessage
 // Note: In MV3, sendResponse must be called synchronously or return true to keep channel open
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.message === "threat_analyze") {
-    handleThreatAnalyze(request.url).then((result) => {
-      try {
-        if (sendResponse) sendResponse(result);
-      } catch (e) {
-        // Channel closed
-      }
-    }).catch((err) => {
-      try {
-        if (sendResponse) sendResponse({ error: err && err.message ? err.message : "Network or server error" });
-      } catch (e) {}
-    });
-    return true;
-  }
-  if (request.message === "domain_screener" || request.message === "domain_screen") {
-    const input = request.input != null ? request.input : (request.domain || request.url || "");
-    handleDomainScreener(input).then((result) => {
-      try {
-        if (sendResponse) sendResponse(result);
-      } catch (e) {}
-    }).catch((err) => {
-      try {
-        if (sendResponse) sendResponse({ ok: false, error: err && err.message ? err.message : "Network or server error" });
-      } catch (e) {}
-    });
-    return true;
-  }
   // handleRequests is async, so we need to handle it properly
   if (request.message === "init") {
     // For init messages, we need to send a response asynchronously
@@ -846,33 +694,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 });
 
-// Context menu: "Expand link with Link Expander" — only for single http(s) links
-function setupContextMenu() {
-  chrome.contextMenus.removeAll(() => {
-    chrome.contextMenus.create({
-      id: "linkslinger-expand-link",
-      title: "Expand link with Link Expander",
-      contexts: ["link"]
-    });
-  });
-}
-
-chrome.contextMenus.onClicked.addListener((info, tab) => {
-  if (info.menuItemId !== "linkslinger-expand-link" || !info.linkUrl) return;
-  const raw = info.linkUrl.trim();
-  // Only act on single http:// or https:// links
-  if (!/^https?:\/\//i.test(raw)) {
-    return;
-  }
-  const url = "https://dontpoke.me/tools/link-expander?url=" + encodeURIComponent(raw);
-  chrome.tabs.create({ url });
-});
-
 // On startup, do an async check for initialization or updates
 (async function initExtension() {
-  setupContextMenu();
+  const settings = await settingsManager.load();
+  const debug = settings && settings.debugMode;
+
   if (!await settingsManager.isInit()) {
-    console.log("Settings not initialized, setting defaults...");
+    if (debug && typeof console !== "undefined" && console.log) {
+      console.log("Settings not initialized, setting defaults...");
+    }
     await settingsManager.init();
 
     // Inject content.js into all current windows/tabs
@@ -890,9 +720,9 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
             target: { tabId: tab.id },
             files: ["content.js"]
           }).catch((error) => {
-            // Silently ignore errors for tabs we can't access (chrome:// pages, etc.)
-            // Content scripts will be injected automatically for new tabs via manifest.json
-            console.log(`Could not inject into tab ${tab.id}: ${error.message}`);
+            if (debug && typeof console !== "undefined" && console.log) {
+              console.log(`Could not inject into tab ${tab.id}: ${error.message}`);
+            }
           });
         });
       });
@@ -902,9 +732,11 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
     const optionsUrl = chrome.runtime.getURL("ui/options/options.html#about");
     chrome.tabs.create({ url: optionsUrl });
   } else if (!await settingsManager.isLatest()) {
-    console.log("Settings version mismatch, performing update...");
+    if (debug && typeof console !== "undefined" && console.log) {
+      console.log("Settings version mismatch, performing update...");
+    }
     await settingsManager.update();
-  } else {
+  } else if (debug && typeof console !== "undefined" && console.log) {
     console.log("Settings up to date.");
   }
 })();

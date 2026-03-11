@@ -88,7 +88,7 @@ chrome.runtime.sendMessage({ message: "init" }, function(response) {
       } catch (e) { /* skip invalid regex */ }
     }
   }
-  if (allowed && settings.actions) {
+  if (allowed && settings.actions && settings.debugMode && typeof console !== "undefined" && console.log) {
     console.log("LinkSlinger: Settings loaded");
   }
 });
@@ -97,10 +97,6 @@ chrome.runtime.sendMessage({ message: "init" }, function(response) {
 chrome.runtime.onMessage.addListener(function(request, sender, callback) {
   if (request.message === "update") {
     settings = request.settings;
-    // QA: verify normalized profiles reach content script (remove for release)
-    if (typeof console !== "undefined" && console.log) {
-      console.log("LinkSlinger settings.profiles", settings.profiles);
-    }
     applySelectionColorFromSettings();
     applyFilterFromSettings();
     if (box) {

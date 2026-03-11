@@ -22,3 +22,33 @@ jobs:
           test -f src/content.js
           test -f src/ui/popup/popup.html
           test -f src/ui/options/options.html
+
+      - name: Check store assets (icons)
+        run: |
+          for size in 16 32 48 128; do
+            test -f "src/assets/icons/icon-${size}.png" || { echo "Missing src/assets/icons/icon-${size}.png"; exit 1; }
+          done
+          echo "Icon assets OK"
+
+  e2e:
+    runs-on: ubuntu-latest
+    needs: validate
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install Chromium dependencies (Puppeteer on Linux)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libasound2
+
+      - name: Run E2E tests
+        run: npm run test:e2e

@@ -75,23 +75,6 @@
               Log activation state (key, profile) on mousedown in the console. Use for troubleshooting selection.
             </p>
           </div>
-          <hr class="advanced-divider" aria-hidden="true">
-          <div class="setting-group api-key-group">
-            <label for="dontpokeApiKey" class="setting-label">dontpoke.me API key (Email Domain Screener)</label>
-            <p class="setting-description">
-              Optional. Format: PREFIX.SECRET. Used by the Analyze tab (email/domain screening). Get keys from your dontpoke.me account.
-            </p>
-            <div id="api-input-container">
-              <input type="password" id="dontpokeApiKey" class="setting-input glass-input" placeholder="PREFIX.SECRET" autocomplete="off">
-            </div>
-            <div id="api-locked-container" class="locked-state" style="display: none;">
-              <span class="api-key-locked-label">
-                <span class="api-key-badge">Key Active</span>
-                <span class="masked-key" aria-hidden="true">••••••••••••••••••••••••</span>
-              </span>
-              <button type="button" id="removeApiKeyBtn" class="btn-remove">Remove Key</button>
-            </div>
-          </div>
           <button id="saveAdvanced" class="btn-primary">Save Advanced Settings</button>
         </div>
       </section>
@@ -155,7 +138,7 @@
               <a href="https://dontpoke.me/tools/linkslinger" target="_blank" rel="noopener noreferrer" class="link-button glass-button">Visit Website</a>
               <a href="https://github.com/DontPokeMe/linkslinger" target="_blank" rel="noopener noreferrer" class="link-button glass-button">View on GitHub</a>
             </div>
-            <span class="version-info">v4.0.4</span>
+            <span class="version-info" id="versionDisplay">v</span>
           </div>
           </div>
         </div>

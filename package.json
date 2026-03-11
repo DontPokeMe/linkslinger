@@ -1,0 +1,12 @@
+{
+  "name": "linkslinger",
+  "version": "4.0.5",
+  "description": "Chrome extension for selecting multiple links via click-and-drag and performing bulk actions.",
+  "private": true,
+  "scripts": {
+    "test:e2e": "node tests/e2e/extension.e2e.js"
+  },
+  "devDependencies": {
+    "puppeteer": "^23.0.0"
+  }
+}

@@ -134,6 +134,14 @@ Active and requested features are tracked in GitHub Issues.
 
 ---
 
+## Chrome Web Store
+
+- **Privacy policy:** [PRIVACY.md](PRIVACY.md) — host this at a stable URL and set that URL in the store listing and Privacy tab.
+- **Zero external calls:** LinkSlinger runs entirely locally in your browser. It never tracks what you do, never collects your data, and never makes external network requests.
+- **Store assets and listing:** See [docs/STORE_ASSETS.md](docs/STORE_ASSETS.md) and [docs/STORE_LISTING.md](docs/STORE_LISTING.md) for required images and suggested dashboard copy.
+
+---
+
 ## License
 
 MIT License.

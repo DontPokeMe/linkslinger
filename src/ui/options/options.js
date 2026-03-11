@@ -141,6 +141,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const navItems = document.querySelectorAll('.nav-item');
   const sections = document.querySelectorAll('.settings-section');
 
+  // Version from manifest (single source of truth)
+  const versionEl = document.getElementById('versionDisplay');
+  if (versionEl && typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.getManifest) {
+    const v = chrome.runtime.getManifest().version || '';
+    versionEl.textContent = v ? `v${v}` : 'v';
+  }
+
   // Open to hash section if present (e.g. #about for new installs)
   const hash = (window.location.hash || '').replace(/^#/, '');
   if (hash && document.getElementById(hash)) {

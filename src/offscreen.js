@@ -16,7 +16,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     // Use the Clipboard API in the offscreen document context
     navigator.clipboard.writeText(request.text)
       .then(() => {
-        console.log('LinkSlinger: Successfully copied to clipboard');
         sendResponse({ success: true });
       })
       .catch((error) => {
