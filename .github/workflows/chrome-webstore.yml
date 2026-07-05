@@ -37,11 +37,98 @@ jobs:
           zip -r ../linkslinger.zip . -x "*.git*"
 
       - name: Publish to Chrome Web Store
-        uses: cicirello/jwt-chrome-extension@v2
-        with:
-          extension-id: ${{ secrets.CHROME_EXTENSION_ID }}
-          client-id: ${{ secrets.CHROME_CLIENT_ID }}
-          client-secret: ${{ secrets.CHROME_CLIENT_SECRET }}
-          refresh-token: ${{ secrets.CHROME_REFRESH_TOKEN }}
-          zip-path: linkslinger.zip
-          publish: true
+        env:
+          CHROME_EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID }}
+          CHROME_PUBLISHER_ID: ${{ secrets.CHROME_PUBLISHER_ID }}
+          CHROME_CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
+          CHROME_CLIENT_SECRET: ${{ secrets.CHROME_CLIENT_SECRET }}
+          CHROME_REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN }}
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+
+          function required(name) {
+            const value = process.env[name];
+            if (!value) throw new Error(`${name} is required`);
+            return value;
+          }
+
+          async function requestJson(label, url, options) {
+            const response = await fetch(url, options);
+            const text = await response.text();
+            let body = {};
+            if (text) {
+              try {
+                body = JSON.parse(text);
+              } catch (error) {
+                throw new Error(`${label} returned non-JSON response (${response.status}): ${text}`);
+              }
+            }
+            if (!response.ok) {
+              throw new Error(`${label} failed (${response.status}): ${JSON.stringify(body)}`);
+            }
+            return body;
+          }
+
+          async function main() {
+            const extensionId = required("CHROME_EXTENSION_ID");
+            const clientId = required("CHROME_CLIENT_ID");
+            const clientSecret = required("CHROME_CLIENT_SECRET");
+            const refreshToken = required("CHROME_REFRESH_TOKEN");
+            const publisherId = process.env.CHROME_PUBLISHER_ID || "";
+
+            const token = await requestJson("Token refresh", "https://oauth2.googleapis.com/token", {
+              method: "POST",
+              headers: { "Content-Type": "application/x-www-form-urlencoded" },
+              body: new URLSearchParams({
+                client_id: clientId,
+                client_secret: clientSecret,
+                refresh_token: refreshToken,
+                grant_type: "refresh_token"
+              })
+            });
+            if (!token.access_token) throw new Error("Token refresh did not return an access token");
+
+            const zip = fs.readFileSync("linkslinger.zip");
+            const authHeaders = { Authorization: `Bearer ${token.access_token}` };
+            const itemName = publisherId ? `publishers/${publisherId}/items/${extensionId}` : "";
+            const uploadUrl = publisherId
+              ? `https://chromewebstore.googleapis.com/upload/v2/${itemName}:upload`
+              : `https://www.googleapis.com/upload/chromewebstore/v1.1/items/${extensionId}?uploadType=media`;
+            const publishUrl = publisherId
+              ? `https://chromewebstore.googleapis.com/v2/${itemName}:publish`
+              : `https://www.googleapis.com/chromewebstore/v1.1/items/${extensionId}/publish`;
+
+            const upload = await requestJson("Upload", uploadUrl, {
+              method: publisherId ? "POST" : "PUT",
+              headers: { ...authHeaders, "Content-Type": "application/zip" },
+              body: zip
+            });
+            console.log(`Upload state: ${upload.uploadState || "unknown"}`);
+            if (upload.uploadState && !["SUCCESS", "UPLOAD_SUCCESS"].includes(upload.uploadState)) {
+              throw new Error(`Upload did not succeed: ${JSON.stringify(upload)}`);
+            }
+            const uploadErrors = upload.itemError || upload.itemErrors || [];
+            if (uploadErrors.length) {
+              throw new Error(`Upload returned item errors: ${JSON.stringify(uploadErrors)}`);
+            }
+
+            const publish = await requestJson("Publish", publishUrl, {
+              method: "POST",
+              headers: { ...authHeaders, "Content-Type": "application/json" },
+              body: publisherId ? JSON.stringify({ publishType: "DEFAULT_PUBLISH" }) : undefined
+            });
+            console.log(`Publish response: ${JSON.stringify(publish)}`);
+            if (Array.isArray(publish.status) && !publish.status.includes("OK")) {
+              throw new Error(`Publish did not return OK status: ${JSON.stringify(publish)}`);
+            }
+            if (typeof publish.status === "string" && publish.status !== "OK") {
+              throw new Error(`Publish did not return OK status: ${JSON.stringify(publish)}`);
+            }
+          }
+
+          main().catch((error) => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE
