@@ -24,8 +24,22 @@
     <main class="main-content">
       <section id="settings" class="settings-section active">
         <h2 class="section-heading">Settings</h2>
+        <div class="usage-strip" aria-label="How to select multiple links">
+          <div class="usage-step">
+            <span class="usage-step-number">1</span>
+            <span>Hold the activator shortcut</span>
+          </div>
+          <div class="usage-step">
+            <span class="usage-step-number">2</span>
+            <span>Drag a box over links</span>
+          </div>
+          <div class="usage-step">
+            <span class="usage-step-number">3</span>
+            <span>Release to run the action</span>
+          </div>
+        </div>
         <div class="settings-card settings-card-main">
-          <p class="setting-description">Each profile maps a trigger (key or modifiers + drag) to an action. Left mouse button only for v1.</p>
+          <p class="setting-description">Click the activator shortcut field, press the key or modifier combo you want, then save profiles. On a web page, hold that shortcut and drag with the left mouse button to draw the selection box.</p>
           <div id="profilesGrid" class="settings-grid" role="list"></div>
           <div class="settings-buttons">
             <button type="button" id="addProfileBtn" class="btn-secondary">Add profile</button>
@@ -63,6 +77,14 @@
               URLs to exclude from selection (one per line)
             </p>
             <textarea id="blocklist" class="setting-textarea textarea-glass" rows="6" placeholder="example.com&#10;another-site.com"></textarea>
+          </div>
+          <hr class="advanced-divider" aria-hidden="true">
+          <div class="setting-group">
+            <label for="bookmarkFolderName" class="setting-label">Bookmarks folder</label>
+            <p class="setting-description">
+              Bookmark actions save selected links into this folder on your Bookmarks Bar.
+            </p>
+            <input type="text" id="bookmarkFolderName" class="setting-input" placeholder="Saved from LinkSlinger">
           </div>
           <hr class="advanced-divider" aria-hidden="true">
           <div class="setting-group">

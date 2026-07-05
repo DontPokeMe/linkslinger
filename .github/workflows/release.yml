@@ -9,15 +9,51 @@ jobs:
   release:
     runs-on: ubuntu-latest
     permissions:
+      actions: write
       contents: write
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
       - name: Get version from tag
         id: tag
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Validate manifest
+        run: |
+          node -e "const m = require('./src/manifest.json'); if (!m.manifest_version || !m.name || !m.version) process.exit(1); console.log('OK', m.name, m.version);"
+
+      - name: Check extension structure
+        run: |
+          test -f src/background.js
+          test -f src/content.js
+          test -f src/ui/popup/popup.html
+          test -f src/ui/options/options.html
+
+      - name: Check store assets (icons)
+        run: |
+          for size in 16 32 48 128; do
+            test -f "src/assets/icons/icon-${size}.png" || { echo "Missing src/assets/icons/icon-${size}.png"; exit 1; }
+          done
+          echo "Icon assets OK"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium dependencies (Puppeteer on Linux)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libasound2
+
+      - name: Run E2E tests
+        run: npm run test:e2e
 
       - name: Package extension
         run: |
@@ -32,3 +68,8 @@ jobs:
           generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish to Chrome Web Store
+        run: gh workflow run chrome-webstore.yml --ref "${GITHUB_REF_NAME}" -f version="${{ steps.tag.outputs.VERSION }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

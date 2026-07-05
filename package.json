@@ -1,6 +1,6 @@
 {
   "name": "linkslinger",
-  "version": "4.0.5",
+  "version": "4.0.6",
   "description": "Chrome extension for selecting multiple links via click-and-drag and performing bulk actions.",
   "private": true,
   "scripts": {

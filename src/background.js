@@ -50,6 +50,9 @@ class SettingsManager {
       actions: typeof settings.actions === "object" && settings.actions !== null ? { ...settings.actions } : {},
       blocked: Array.isArray(settings.blocked) ? settings.blocked.filter(b => typeof b === "string") : [],
       profiles: Array.isArray(settings.profiles) ? [...settings.profiles] : undefined,
+      bookmarkFolderName: typeof settings.bookmarkFolderName === "string" && settings.bookmarkFolderName.trim()
+        ? settings.bookmarkFolderName.trim()
+        : "Saved from LinkSlinger",
       debugMode: typeof settings.debugMode === "boolean" ? settings.debugMode : false
     };
     const defaultAction = this.initDefaults().actions["101"];
@@ -116,9 +119,11 @@ class SettingsManager {
           let key = kind === "key" ? normKey(trigger.key) : "";
           let mods = normMods(trigger.mods || {});
           const mouseButton = Number.isInteger(trigger.mouseButton) ? trigger.mouseButton : 0;
-          if (kind === "mods" || !key) {
+          if (kind === "mods" && !mods.shift && !mods.alt && !mods.ctrl && !mods.meta) {
             kind = "key";
             key = key || "z";
+          } else if (kind === "key" && !key) {
+            key = "z";
           }
           const actionId = String(p?.actionId || firstActionId);
           const validActionId = out.actions[actionId] ? actionId : firstActionId;
@@ -267,6 +272,7 @@ class SettingsManager {
         }
       },
       blocked: [],
+      bookmarkFolderName: "Saved from LinkSlinger",
       debugMode: false,
       profiles: [
         { id: "p1", name: "Default", trigger: { kind: "key", key: "z", mods: { shift: false, alt: false, ctrl: false, meta: false }, mouseButton: 0 }, actionId: "101" },
@@ -502,36 +508,45 @@ async function ensureFolder(parentId, title) {
   return created.id;
 }
 
-async function handleBookmarkAction(urls) {
+async function handleBookmarkAction(urls, folderName) {
   const raw = urls || [];
-  const safe = raw.map((u) => (u && typeof u.url === "string" ? u.url : typeof u === "string" ? u : "")).filter((u) => /^https?:\/\//i.test(u));
+  const safe = raw
+    .map((u) => ({
+      url: u && typeof u.url === "string" ? u.url : typeof u === "string" ? u : "",
+      title: u && typeof u.title === "string" ? u.title.trim() : ""
+    }))
+    .filter((u) => /^https?:\/\//i.test(u.url));
 
   const tree = await chrome.bookmarks.getTree();
   const bar = findBookmarksBar(tree);
   const rootId = bar?.id || "1";
 
-  const lsFolderId = await ensureFolder(rootId, "LinkSlinger");
-  const dateTitle = new Date().toISOString().slice(0, 10);
-  const dateFolderId = await ensureFolder(lsFolderId, dateTitle);
+  const targetFolderName = typeof folderName === "string" && folderName.trim()
+    ? folderName.trim()
+    : "Saved from LinkSlinger";
+  const targetFolderId = await ensureFolder(rootId, targetFolderName);
 
-  const existing = await chrome.bookmarks.getChildren(dateFolderId);
+  const existing = await chrome.bookmarks.getChildren(targetFolderId);
   const existingSet = new Set(existing.filter((n) => n.url).map((n) => n.url));
 
   let added = 0;
   let skipped = 0;
-  for (const url of safe) {
+  for (const item of safe) {
+    const { url } = item;
     if (existingSet.has(url)) {
       skipped++;
       continue;
     }
-    let title;
-    try {
-      const u = new URL(url);
-      title = u.hostname || url;
-    } catch (e) {
-      title = url;
+    let title = item.title;
+    if (!title) {
+      try {
+        const u = new URL(url);
+        title = u.hostname || url;
+      } catch (e) {
+        title = url;
+      }
     }
-    await chrome.bookmarks.create({ parentId: dateFolderId, title, url });
+    await chrome.bookmarks.create({ parentId: targetFolderId, title, url });
     added++;
     existingSet.add(url);
   }
@@ -568,7 +583,7 @@ async function handleRequests(request, sender, sendResponse) {
           break;
         }
         case "bm": {
-          const result = await handleBookmarkAction(request.urls);
+          const result = await handleBookmarkAction(request.urls, currentSettings.bookmarkFolderName);
           if (currentSettings.debugMode && typeof console !== "undefined" && console.log) {
             console.log("LinkSlinger: Bookmark —", result.added, "added,", result.skipped, "skipped");
           }

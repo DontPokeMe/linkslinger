@@ -45,17 +45,28 @@ function triggerToDisplay(trigger) {
 
 function triggerFromKeyEvent(e) {
   let key = (e.key && typeof e.key === "string") ? e.key.trim().toLowerCase() : "";
-  if (MODIFIER_KEYS.has(e.key) || !key) key = "z";
   const mods = {
     shift: !!e.shiftKey,
     alt: !!e.altKey,
     ctrl: !!e.ctrlKey,
     meta: false
   };
+  if (MODIFIER_KEYS.has(e.key)) {
+    return { kind: "mods", key: "", mods, mouseButton: 0 };
+  }
+  if (!key) key = "z";
   if (key === "shift") mods.shift = false;
   else if (key === "alt") mods.alt = false;
   else if (key === "control" || key === "ctrl") mods.ctrl = false;
   return { kind: "key", key, mods, mouseButton: 0 };
+}
+
+function triggerSignature(trigger) {
+  const t = normalizeTriggerForUI(trigger);
+  const m = t.mods || {};
+  const mods = `${+m.shift}${+m.alt}${+m.ctrl}${+m.meta}`;
+  if (t.kind === 'key' && t.key) return `key:${t.key}|mods:${mods}|btn:${t.mouseButton || 0}`;
+  return `mods:${mods}|btn:${t.mouseButton || 0}`;
 }
 
 const ACTION_TYPES = [
@@ -186,6 +197,9 @@ async function loadSettings() {
   try {
     // Load from chrome.storage.local (where background.js stores settings)
     const data = await chrome.storage.local.get(['settings', 'dontpokeApiKey']);
+    if (!data.settings || !data.settings.actions) {
+      data.settings = await chrome.runtime.sendMessage({ message: 'init' });
+    }
     
     if (data.settings && data.settings.actions) {
       const firstActionId = Object.keys(data.settings.actions)[0];
@@ -215,6 +229,11 @@ async function loadSettings() {
       if (blocklistTextarea) {
         blocklistTextarea.value = data.settings.blocked.join('\n');
       }
+    }
+
+    const bookmarkFolderInput = document.getElementById('bookmarkFolderName');
+    if (bookmarkFolderInput) {
+      bookmarkFolderInput.value = (data.settings && data.settings.bookmarkFolderName) || 'Saved from LinkSlinger';
     }
 
     updateApiKeyUI(typeof data.dontpokeApiKey === 'string' ? data.dontpokeApiKey : '');
@@ -256,16 +275,15 @@ function attachTriggerCapture(triggerDisplay, modsWrap) {
         const k = cb.dataset.mod;
         if (k) mods[k] = cb.checked;
       });
-      t.kind = 'key';
-      if (!t.key || typeof t.key !== 'string') t.key = 'z';
-      t.mods = modsForKey(t.key, mods);
+      if (!t.key || typeof t.key !== 'string') t.kind = 'mods';
+      t.mods = t.kind === 'key' ? modsForKey(t.key, mods) : mods;
       triggerDisplay.dataset.trigger = JSON.stringify(t);
       triggerDisplay.value = triggerToDisplay(t);
     }
   modsWrap.querySelectorAll('.trigger-mod-checkbox').forEach((cb) => {
     cb.addEventListener('change', syncModsFromCheckboxesToTrigger);
   });
-  triggerDisplay.addEventListener('mousedown', (e) => {
+  function beginTriggerCapture(e) {
     if (e.target !== triggerDisplay) return;
     e.preventDefault();
     triggerDisplay.value = 'Press any key...';
@@ -287,7 +305,9 @@ function attachTriggerCapture(triggerDisplay, modsWrap) {
         triggerDisplay.value = triggerToDisplay(stored);
       } catch (_) {}
     }, { once: true });
-  }, true);
+  }
+  triggerDisplay.addEventListener('mousedown', beginTriggerCapture, true);
+  triggerDisplay.addEventListener('focus', beginTriggerCapture, true);
 }
 
 function createProfileCard(p, idx, actions, gridEl) {
@@ -318,7 +338,7 @@ function createProfileCard(p, idx, actions, gridEl) {
   const trigger = normalizeTriggerForUI(p.trigger);
   const triggerLabel = document.createElement('span');
   triggerLabel.className = 'field-label';
-  triggerLabel.textContent = 'Trigger';
+  triggerLabel.textContent = idx === 0 ? 'Activator shortcut' : 'Activator';
   const triggerWrap = document.createElement('div');
   triggerWrap.className = 'trigger-capture-wrap';
   const triggerDisplay = document.createElement('input');
@@ -326,6 +346,7 @@ function createProfileCard(p, idx, actions, gridEl) {
   triggerDisplay.readOnly = true;
   triggerDisplay.className = 'trigger-capture-input setting-input input-glass';
   triggerDisplay.placeholder = 'Click then press key combo';
+  triggerDisplay.setAttribute('aria-label', 'Activator shortcut');
   triggerDisplay.value = triggerToDisplay(trigger);
   triggerDisplay.dataset.trigger = JSON.stringify(trigger);
   triggerWrap.appendChild(triggerDisplay);
@@ -350,6 +371,14 @@ function createProfileCard(p, idx, actions, gridEl) {
   triggerWrap.appendChild(modsLabel);
   triggerWrap.appendChild(modsWrap);
   attachTriggerCapture(triggerDisplay, modsWrap);
+  const triggerError = document.createElement('p');
+  triggerError.className = 'filter-error duplicate-trigger-error';
+  triggerError.hidden = true;
+  triggerError.textContent = 'This activator is already assigned to another profile.';
+
+  const triggerHelp = document.createElement('p');
+  triggerHelp.className = 'profile-help-text';
+  triggerHelp.textContent = 'Hold this shortcut, drag over links, then release.';
 
   const actionLabel = document.createElement('span');
   actionLabel.className = 'field-label';
@@ -393,6 +422,8 @@ function createProfileCard(p, idx, actions, gridEl) {
   triggerBlock.className = 'profile-card-field profile-card-trigger';
   triggerBlock.appendChild(triggerLabel);
   triggerBlock.appendChild(triggerWrap);
+  triggerBlock.appendChild(triggerError);
+  triggerBlock.appendChild(triggerHelp);
 
   const actionBlock = document.createElement('div');
   actionBlock.className = 'profile-card-field profile-card-action';
@@ -424,15 +455,21 @@ function normalizeTriggerForUI(trigger) {
   if (!trigger || typeof trigger !== 'object') {
     return { kind: 'key', key: 'z', mods: { shift: false, alt: false, ctrl: false, meta: false }, mouseButton: 0 };
   }
-  const kind = 'key';
-  const key = (trigger.kind === 'mods' || !trigger.key) ? 'z' : String(trigger.key).trim().toLowerCase() || 'z';
+  let kind = trigger.kind === 'mods' ? 'mods' : 'key';
+  let key = kind === 'key' ? String(trigger.key || '').trim().toLowerCase() : '';
   const rawMods = {
     shift: !!(trigger.mods && trigger.mods.shift),
     alt: !!(trigger.mods && trigger.mods.alt),
     ctrl: !!(trigger.mods && trigger.mods.ctrl),
     meta: false
   };
-  const mods = modsForKey(key, rawMods);
+  if (kind === 'mods' && !rawMods.shift && !rawMods.alt && !rawMods.ctrl && !rawMods.meta) {
+    kind = 'key';
+    key = 'z';
+  } else if (kind === 'key' && !key) {
+    key = 'z';
+  }
+  const mods = kind === 'key' ? modsForKey(key, rawMods) : rawMods;
   return { kind, key, mods, mouseButton: Number.isInteger(trigger.mouseButton) ? trigger.mouseButton : 0 };
 }
 
@@ -446,6 +483,11 @@ async function saveProfiles() {
     if (!grid) return;
     const actionIds = Object.keys(settings.actions);
     const profiles = [];
+    const seenTriggers = new Set();
+    let hasDuplicateTrigger = false;
+    grid.querySelectorAll('.duplicate-trigger-error').forEach((el) => {
+      el.hidden = true;
+    });
     grid.querySelectorAll('.profile-card').forEach((card, idx) => {
       const nameInput = card.querySelector('.profile-name-input');
       const triggerDisplay = card.querySelector('.trigger-capture-input');
@@ -467,9 +509,18 @@ async function saveProfiles() {
           const k = cb.dataset.mod;
           if (k) mods[k] = cb.checked;
         });
-        trigger.mods = modsForKey(trigger.key || 'z', mods);
+        trigger.mods = trigger.kind === 'key' ? modsForKey(trigger.key || 'z', mods) : mods;
       }
-      const safeTrigger = { ...trigger, kind: 'key', key: String(trigger.key || 'z').trim().toLowerCase() };
+      const safeTrigger = trigger.kind === 'mods'
+        ? { ...trigger, kind: 'mods', key: '' }
+        : { ...trigger, kind: 'key', key: String(trigger.key || 'z').trim().toLowerCase() };
+      const triggerSig = triggerSignature(safeTrigger);
+      if (seenTriggers.has(triggerSig)) {
+        hasDuplicateTrigger = true;
+        const err = card.querySelector('.duplicate-trigger-error');
+        if (err) err.hidden = false;
+      }
+      seenTriggers.add(triggerSig);
       const actionType = ACTION_TYPES.some((t) => t.value === actionTypeSelect.value) ? actionTypeSelect.value : 'tabs';
       const smart = smartCheckbox ? smartCheckbox.checked : false;
       let actionId = card.dataset.actionId || '';
@@ -498,6 +549,7 @@ async function saveProfiles() {
         actionId
       });
     });
+    if (hasDuplicateTrigger) return;
     settings.profiles = profiles;
     await chrome.storage.local.set({ settings });
     chrome.runtime.sendMessage({ message: 'update', settings });
@@ -606,6 +658,11 @@ async function saveAdvancedSettings() {
       
       settings.blocked = blocklist;
     }
+
+    const bookmarkFolderInput = document.getElementById('bookmarkFolderName');
+    settings.bookmarkFolderName = bookmarkFolderInput && bookmarkFolderInput.value.trim()
+      ? bookmarkFolderInput.value.trim()
+      : 'Saved from LinkSlinger';
 
     const debugModeCheckbox = document.getElementById('debugMode');
     if (debugModeCheckbox) {

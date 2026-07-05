@@ -20,12 +20,12 @@ Select multiple links with a drag, then open in tabs, copy, bookmark, or export.
 
 **Suggested (overview + features):**
 
-LinkSlinger lets you select many links at once by dragging a box, then perform bulk actions in one go. Hold a key (e.g. Z), drag to select links on any page, and release to open them in new tabs, copy URLs to the clipboard, bookmark them, or export. It never tracks what you do, never collects your data, and never makes external network requests.
+LinkSlinger lets you select many links at once by dragging a box, then perform bulk actions in one go. Hold your chosen activator shortcut, drag to select links on any page, and release to open them in new tabs, copy URLs to the clipboard, bookmark them, or export. It never tracks what you do, never collects your data, and never makes external network requests.
 
 **Features:**
 - **Bulk link selection:** Draw a selection box to include only the links you want.
-- **Flexible actions:** Open in tabs, open in a new window, copy (multiple formats), or add to bookmarks (Bookmarks Bar → LinkSlinger → date).
-- **Profiles and triggers:** Map different keys or modifiers to different actions (e.g. Z = tabs, Alt+C = copy, Ctrl+B = bookmark).
+- **Flexible actions:** Open in tabs, open in a new window, copy (multiple formats), or add to bookmarks in a configurable folder such as "Saved from LinkSlinger".
+- **Profiles and triggers:** Map different keys or modifiers to different actions (e.g. Shift = tabs, Alt = copy, Ctrl = bookmark).
 - **Filters:** Optional regex include/exclude filter and per-site blocklist.
 
 LinkSlinger is open source and part of the dontpoke.me OSINT toolkit. Your settings stay on your device; no data is sent to any external service.
@@ -53,12 +53,11 @@ Use when the dashboard asks why each permission is needed. Example wording:
 
 - **Access to all sites (host permission):** Required so the extension can run the link-selection overlay on web pages the user visits. No data is sent to the developer; the extension never makes external requests.
 - **Tabs:** To open selected links in new tabs or a new window and to communicate with the content script on open tabs for settings updates.
-- **Bookmarks:** To add selected links to a folder under Bookmarks Bar (e.g. LinkSlinger → date) when the user chooses the bookmark action.
+- **Bookmarks:** To add selected links to the configured Bookmarks Bar folder when the user chooses the bookmark action.
 - **Storage:** To save user settings locally on the device.
 - **Scripting:** To inject the content script into existing tabs on first install/update so selection works without reloading pages.
 - **Clipboard write:** To copy selected links or formatted text to the clipboard when the user chooses the copy action.
 - **Offscreen document:** Used to perform clipboard operations from the extension (Chrome MV3 requirement).
-- **Context menus:** To support any in-page link selection shortcuts or context entries implemented entirely locally.
 
 ## Support URL
 

@@ -2,6 +2,11 @@ name: Chrome Web Store
 
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: Version to publish
+        required: false
+        type: string
   release:
     types: [published]
 
@@ -13,10 +18,14 @@ jobs:
 
       - name: Get version
         id: version
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
         run: |
           if [ "${{ github.event_name }}" = "release" ]; then
             TAG="${{ github.event.release.tag_name }}"
             echo "VERSION=${TAG#v}" >> $GITHUB_OUTPUT
+          elif [ -n "$INPUT_VERSION" ]; then
+            echo "VERSION=$INPUT_VERSION" >> $GITHUB_OUTPUT
           else
             V=$(node -p "require('./src/manifest.json').version")
             echo "VERSION=$V" >> $GITHUB_OUTPUT

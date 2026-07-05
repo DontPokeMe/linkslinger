@@ -15,7 +15,6 @@ desktop.ini
 
 # Dependencies
 node_modules/
-package-lock.json
 
 # Build artifacts and releases
 build/

@@ -107,7 +107,6 @@ Declared in `manifest.json`:
 * `scripting`
 * `clipboardWrite`
 * `offscreen`
-* `contextMenus`
 * `host_permissions: <all_urls>`
 
 Ensure permissions remain minimal and justified.

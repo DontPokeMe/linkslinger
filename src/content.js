@@ -24,6 +24,8 @@ var links = [];
 var box = null;
 var count_label = null;
 var overlay = null;
+var activation_hint = null;
+var activationHintTimer = 0;
 var currentSelectionColor = "#3b82f6";
 var linkFilterRegex = null;
 var linkFilterMode = "exclude";
@@ -136,6 +138,69 @@ function triggerSigContent(t) {
   return "mods:" + modStr + "|btn:" + btn;
 }
 
+function getProfileForTriggerKey(key, event) {
+  if (!settings || !Array.isArray(settings.profiles) || !settings.actions) return null;
+  var normalized = normalizeKeyForContent(key);
+  if (!normalized) return null;
+  var eventMods = {
+    shift: !!(event && event.shiftKey),
+    alt: !!(event && event.altKey),
+    ctrl: !!(event && event.ctrlKey),
+    meta: !!(event && event.metaKey)
+  };
+  for (var i = 0; i < settings.profiles.length; i++) {
+    var p = settings.profiles[i];
+    if (!p || !p.trigger || p.trigger.kind !== "key") continue;
+    if (normalizeKeyForContent(p.trigger.key) !== normalized || !settings.actions[p.actionId]) continue;
+    var mods = p.trigger.mods || {};
+    if (!!mods.shift === eventMods.shift &&
+        !!mods.alt === eventMods.alt &&
+        !!mods.ctrl === eventMods.ctrl &&
+        !!mods.meta === eventMods.meta) {
+      return p;
+    }
+  }
+  return null;
+}
+
+function displayTriggerForContent(trigger) {
+  if (!trigger) return "activator shortcut";
+  var parts = [];
+  var mods = trigger.mods || {};
+  if (mods.shift) parts.push("Shift");
+  if (mods.alt) parts.push("Alt");
+  if (mods.ctrl) parts.push("Ctrl");
+  if (mods.meta) parts.push("Meta");
+  if (trigger.kind === "mods") return parts.length ? parts.join("+") : "activator shortcut";
+  var key = normalizeKeyForContent(trigger.key || "z");
+  parts.push(key.length === 1 ? key.toUpperCase() : key.charAt(0).toUpperCase() + key.slice(1));
+  return parts.join("+");
+}
+
+function showActivationHint(profile) {
+  if (!profile || box_on) return;
+  if (!activation_hint) {
+    activation_hint = document.createElement("div");
+    activation_hint.className = "linkslinger-activation-hint";
+    document.documentElement.appendChild(activation_hint);
+  }
+  activation_hint.textContent = "Hold " + displayTriggerForContent(profile.trigger) + " and drag to select links";
+  activation_hint.classList.add("visible");
+  if (activationHintTimer) clearTimeout(activationHintTimer);
+  activationHintTimer = setTimeout(function() {
+    if (activation_hint) activation_hint.classList.remove("visible");
+    activationHintTimer = 0;
+  }, 2200);
+}
+
+function hideActivationHint() {
+  if (activationHintTimer) {
+    clearTimeout(activationHintTimer);
+    activationHintTimer = 0;
+  }
+  if (activation_hint) activation_hint.classList.remove("visible");
+}
+
 function resolveActiveActionId(mouseButton, e) {
   var profiles = Array.isArray(settings?.profiles) ? settings.profiles : [];
   var actions = settings?.actions;
@@ -206,6 +271,71 @@ function shouldSelectLink(url) {
   return linkFilterMode === "include" ? matches : !matches;
 }
 
+function getVisibleSelectionRect() {
+  var scrollX = window.pageXOffset || document.documentElement.scrollLeft;
+  var scrollY = window.pageYOffset || document.documentElement.scrollTop;
+  var left = box.x1 - scrollX;
+  var right = box.x2 - scrollX;
+  var top = box.y1 - scrollY;
+  var bottom = box.y2 - scrollY;
+  var viewportLeft = Math.max(0, Math.min(left, right));
+  var viewportRight = Math.min(window.innerWidth, Math.max(left, right));
+  var viewportTop = Math.max(0, Math.min(top, bottom));
+  var viewportBottom = Math.min(window.innerHeight, Math.max(top, bottom));
+  if (viewportRight <= viewportLeft || viewportBottom <= viewportTop) {
+    return { left: 0, right: 0, top: 0, bottom: 0, width: 0, height: 0 };
+  }
+  return {
+    left: viewportLeft,
+    right: viewportRight,
+    top: viewportTop,
+    bottom: viewportBottom,
+    width: viewportRight - viewportLeft,
+    height: viewportBottom - viewportTop
+  };
+}
+
+function rectsOverlap(a, b) {
+  return !(a.left > b.right || a.right < b.left || a.top > b.bottom || a.bottom < b.top);
+}
+
+function isFixedOrSticky(element) {
+  var node = element;
+  while (node && node.nodeType === 1 && node !== document.body && node !== document.documentElement) {
+    var position = window.getComputedStyle(node, null).position;
+    if (position === "fixed" || position === "sticky") return true;
+    node = node.parentElement;
+  }
+  return false;
+}
+
+function getCurrentLinkRect(link) {
+  var rect = link.getBoundingClientRect();
+  var left = rect.left;
+  var top = rect.top;
+  var right = rect.right;
+  var bottom = rect.bottom;
+
+  for (var i = 0; i < link.childNodes.length; i++) {
+    if (link.childNodes[i].nodeName === "IMG") {
+      var imgRect = link.childNodes[i].getBoundingClientRect();
+      left = Math.min(left, imgRect.left);
+      top = Math.min(top, imgRect.top);
+      right = Math.max(right, imgRect.right);
+      bottom = Math.max(bottom, imgRect.bottom);
+    }
+  }
+
+  return {
+    left: left,
+    top: top,
+    right: right,
+    bottom: bottom,
+    width: Math.max(0, right - left),
+    height: Math.max(0, bottom - top)
+  };
+}
+
 function mousemove(event) {
   prevent_escalation(event);
 
@@ -269,6 +399,7 @@ function resolveKeyTriggeredActionId(mouseButton) {
 function startSelectionFromEvent(event) {
   // This is the "else" block of your current mousedown, extracted as a function.
   if (box_on) clean_up();
+  hideActivationHint();
 
   var actionCfg = settings.actions[activeActionId];
   var boxColor = normalizeHexColor(actionCfg && actionCfg.color ? actionCfg.color : currentSelectionColor);
@@ -531,6 +662,9 @@ function start() {
     if (comp.visibility === "hidden" || comp.display === "none") {
       continue;
     }
+    if (isFixedOrSticky(page_links[i])) {
+      continue;
+    }
 
     var pos = getXY(page_links[i]);
     var width = pos.width != null ? pos.width : page_links[i].offsetWidth;
@@ -653,9 +787,13 @@ function detech(x, y, open) {
   var count_tabs = new Set();
   var open_tabs = [];
   var overlap_count = 0;
+  var selectionRect = getVisibleSelectionRect();
 
   for (var i = 0; i < links.length; i++) {
-    var overlaps = !(links[i].x1 > box.x2 || links[i].x2 < box.x1 || links[i].y1 > box.y2 || links[i].y2 < box.y1);
+    var linkRect = getCurrentLinkRect(links[i]);
+    var overlaps = selectionRect.width > 0 && selectionRect.height > 0 &&
+                   linkRect.width > 0 && linkRect.height > 0 &&
+                   rectsOverlap(linkRect, selectionRect);
     if (overlaps) overlap_count++;
     var passesFilter = shouldSelectLink(links[i].href);
     if (overlaps && passesFilter) {
@@ -666,28 +804,25 @@ function detech(x, y, open) {
         });
       }
 
-      var scrollX = window.pageXOffset || document.documentElement.scrollLeft;
-      var scrollY = window.pageYOffset || document.documentElement.scrollTop;
-      var vpLeft = links[i].x1 - scrollX;
-      var vpTop = links[i].y1 - scrollY;
-
       if (links[i].box === null) {
         var link_box = document.createElement("span");
         link_box.style.id = "linkslinger-link";
         link_box.style.margin = "0px auto";
         link_box.style.border = "1px solid red";
         link_box.style.position = "fixed";
-        link_box.style.width = links[i].width + "px";
-        link_box.style.height = links[i].height + "px";
-        link_box.style.top = vpTop + "px";
-        link_box.style.left = vpLeft + "px";
+        link_box.style.width = linkRect.width + "px";
+        link_box.style.height = linkRect.height + "px";
+        link_box.style.top = linkRect.top + "px";
+        link_box.style.left = linkRect.left + "px";
         link_box.style.zIndex = Z_INDEX;
 
         document.body.appendChild(link_box);
         links[i].box = link_box;
       } else {
-        links[i].box.style.left = vpLeft + "px";
-        links[i].box.style.top = vpTop + "px";
+        links[i].box.style.width = linkRect.width + "px";
+        links[i].box.style.height = linkRect.height + "px";
+        links[i].box.style.left = linkRect.left + "px";
+        links[i].box.style.top = linkRect.top + "px";
         links[i].box.style.visibility = "visible";
       }
 
@@ -752,6 +887,7 @@ function keydown(event) {
     if (!event.repeat && typeof event.key === "string" && event.key.length >= 1) {
       heldKey = normalizeKeyForContent(event.key);
       heldMods = { shift: !!event.shiftKey, alt: !!event.altKey, ctrl: !!event.ctrlKey, meta: !!event.metaKey };
+      showActivationHint(getProfileForTriggerKey(heldKey, event));
     }
     if (os === OS_LINUX && allow_key(key_pressed)) stop_menu = true;
   } else {
@@ -779,6 +915,7 @@ function keyup(event) {
     if (typeof event.key === "string" && event.key.length >= 1 && normalizeKeyForContent(event.key) === heldKey) {
       heldKey = "";
       heldMods = { shift: false, alt: false, ctrl: false, meta: false };
+      hideActivationHint();
     }
     remove_key();
   }
