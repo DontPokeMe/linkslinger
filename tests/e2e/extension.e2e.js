@@ -303,8 +303,12 @@ async function runE2E() {
   const { server, origin } = await startTestServer();
   let browser;
   try {
+    // Chrome's new headless mode does not reliably load extensions on Linux,
+    // so CI runs headed under xvfb (PUPPETEER_HEADLESS=false). Other platforms
+    // keep new-headless, which loads extensions fine.
+    const headless = process.env.PUPPETEER_HEADLESS === "false" ? false : "new";
     browser = await puppeteer.launch({
-      headless: "new",
+      headless,
       args: [
         "--disable-gpu",
         "--disable-dev-shm-usage",
