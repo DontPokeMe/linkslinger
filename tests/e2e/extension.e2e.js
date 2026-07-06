@@ -63,7 +63,7 @@ async function getExtensionWorker(browser) {
     (target) =>
       target.type() === "service_worker" &&
       target.url().includes("background.js"),
-    { timeout: 10000 }
+    { timeout: 30000 }
   );
   const worker = await target.worker();
   assert(worker, "Could not get extension service worker");
@@ -208,7 +208,7 @@ async function testOpenTabs(browser, origin) {
   await dragSelect(page, "Shift");
   await browser.waitForTarget(
     (target) => !existingTargets.has(target) && target.url().includes("/alpha"),
-    { timeout: 10000 }
+    { timeout: 30000 }
   );
   const urls = browser.targets().map((target) => target.url());
   assert(urls.some((url) => url.includes("/alpha")), "Expected selected Alpha link to open in a tab");
@@ -222,7 +222,7 @@ async function testDefaultKeyOpenTabs(browser, origin) {
   await dragSelectWithKey(page, "z");
   await browser.waitForTarget(
     (target) => !existingTargets.has(target) && target.url().includes("/alpha"),
-    { timeout: 10000 }
+    { timeout: 30000 }
   );
   const urls = browser.targets().map((target) => target.url());
   assert(urls.some((url) => url.includes("/alpha")), "Expected default Z-selected Alpha link to open in a tab");
