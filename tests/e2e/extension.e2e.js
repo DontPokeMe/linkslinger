@@ -105,6 +105,37 @@ async function setExtensionSettings(worker) {
   });
 }
 
+async function setDefaultKeySettings(worker) {
+  await worker.evaluate(async () => {
+    const actionOptions = {
+      smart: 0,
+      ignore: [0],
+      delay: 0,
+      close: 0,
+      block: true,
+      reverse: false,
+      end: false,
+      filterPattern: "",
+      filterMode: "exclude",
+      filterCaseInsensitive: true,
+      copy: 1
+    };
+    const settings = {
+      version: 1,
+      bookmarkFolderName: "Saved from LinkSlinger",
+      blocked: [],
+      debugMode: false,
+      actions: {
+        "101": { mouse: 0, key: 90, action: "tabs", color: "#FFA500", options: { ...actionOptions } }
+      },
+      profiles: [
+        { id: "p1", name: "Default", trigger: { kind: "key", key: "z", mods: { shift: false, alt: false, ctrl: false, meta: false }, mouseButton: 0 }, actionId: "101" }
+      ]
+    };
+    await chrome.storage.local.set({ settings, version: "5" });
+  });
+}
+
 async function resetBookmarks(worker) {
   await worker.evaluate(async () => {
     const matches = await chrome.bookmarks.search({ title: "Saved from LinkSlinger" });
@@ -119,6 +150,16 @@ async function dragSelect(page, modifier) {
   await page.mouse.move(430, 250, { steps: 12 });
   await page.mouse.up();
   await page.keyboard.up(modifier);
+  await sleep(600);
+}
+
+async function dragSelectWithKey(page, key) {
+  await page.keyboard.down(key);
+  await page.mouse.move(30, 120);
+  await page.mouse.down();
+  await page.mouse.move(430, 250, { steps: 12 });
+  await page.mouse.up();
+  await page.keyboard.up(key);
   await sleep(600);
 }
 
@@ -175,10 +216,32 @@ async function testOpenTabs(browser, origin) {
   await page.close();
 }
 
+async function testDefaultKeyOpenTabs(browser, origin) {
+  const page = await openFixturePage(browser, origin);
+  const existingTargets = new Set(browser.targets());
+  await dragSelectWithKey(page, "z");
+  await browser.waitForTarget(
+    (target) => !existingTargets.has(target) && target.url().includes("/alpha"),
+    { timeout: 10000 }
+  );
+  const urls = browser.targets().map((target) => target.url());
+  assert(urls.some((url) => url.includes("/alpha")), "Expected default Z-selected Alpha link to open in a tab");
+  assert(!urls.some((url) => url.includes("/header-link")), "Sticky header link should not open for default key selection");
+  await page.close();
+}
+
 async function testCopy(browser, origin) {
   const page = await openFixturePage(browser, origin);
   await browser.defaultBrowserContext().overridePermissions(origin, ["clipboard-read"]);
   await dragSelect(page, "Alt");
+  await page.waitForFunction(
+    async (expected) => {
+      const text = await navigator.clipboard.readText();
+      return text.includes(expected);
+    },
+    { timeout: 5000 },
+    origin + "/alpha"
+  );
   const clipboardText = await page.evaluate(() => navigator.clipboard.readText());
   assert(clipboardText.includes(origin + "/alpha"), "Expected copied links to include Alpha");
   assert(!clipboardText.includes("/header-link"), "Copied links should not include sticky header link");
@@ -225,13 +288,15 @@ async function runE2E() {
     const worker = await getExtensionWorker(browser);
     await setExtensionSettings(worker);
     await testOptionsPage(worker, browser);
+    await setDefaultKeySettings(worker);
+    await testDefaultKeyOpenTabs(browser, origin);
     await setExtensionSettings(worker);
     await testOpenTabs(browser, origin);
     await testCopy(browser, origin);
     await testBookmarks(worker, browser, origin);
 
     const version = await worker.evaluate(() => chrome.runtime.getManifest().version);
-    console.log("E2E OK: modifier actions, options validation, and bookmarks verified.", "v" + version);
+    console.log("E2E OK: default key selection, modifier actions, options validation, and bookmarks verified.", "v" + version);
   } catch (err) {
     console.error("E2E failed:", err.message);
     throw err;

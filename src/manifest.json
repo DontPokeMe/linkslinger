@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "LinkSlinger",
+  "name": "LinkSlinger: Open Multiple Links at Once",
   "version": "4.0.8",
-  "description": "Select, open, copy, or bookmark multiple links at once. Part of the dontpoke.me toolkit.",
+  "description": "Select multiple links with a drag, then open all in new tabs, copy, or bookmark them at once. Privacy first, open source.",
 
   "action": {
     "default_popup": "ui/popup/popup.html",
@@ -28,7 +28,7 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content.js"],
+      "js": ["browser-compat.js", "content.js"],
       "css": ["styles/content.css"],
       "run_at": "document_end",
       "all_frames": true

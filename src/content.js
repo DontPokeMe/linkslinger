@@ -10,6 +10,7 @@ const INCLUDE_LINKS = 1;
 var settings = null;
 var setting = -1;
 var activeActionId = null;
+var activeProfileId = null;
 var key_pressed = 0;
 var heldKey = "";
 var heldMods = { shift: false, alt: false, ctrl: false, meta: false };
@@ -105,8 +106,40 @@ chrome.runtime.onMessage.addListener(function(request, sender, callback) {
       box.style.setProperty("--ls-box-color", currentSelectionColor);
       if (count_label) count_label.style.setProperty("--ls-box-color", currentSelectionColor);
     }
+  } else if (request.message === "copy-to-clipboard") {
+    copyTextFromContentScript(request.text)
+      .then(function() {
+        if (typeof callback === "function") callback({ success: true });
+      })
+      .catch(function(error) {
+        if (typeof callback === "function") callback({ success: false, error: error && error.message ? error.message : String(error) });
+      });
+    return true;
   }
 });
+
+function copyTextFromContentScript(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    return navigator.clipboard.writeText(text);
+  }
+  return new Promise(function(resolve, reject) {
+    try {
+      var textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.setAttribute("readonly", "");
+      textarea.style.position = "fixed";
+      textarea.style.left = "-9999px";
+      textarea.style.top = "0";
+      document.documentElement.appendChild(textarea);
+      textarea.select();
+      var copied = document.execCommand("copy");
+      textarea.remove();
+      copied ? resolve() : reject(new Error("document.execCommand('copy') returned false"));
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
 
 var DEFAULT_SELECTION_COLOR = "#3b82f6";
 
@@ -201,12 +234,13 @@ function hideActivationHint() {
   if (activation_hint) activation_hint.classList.remove("visible");
 }
 
-function resolveActiveActionId(mouseButton, e) {
+function resolveActiveProfile(mouseButton, e) {
   var profiles = Array.isArray(settings?.profiles) ? settings.profiles : [];
   var actions = settings?.actions;
   if (!profiles.length) {
     if (actions && Object.keys(actions).length > 0 && mouseButton === LEFT_BUTTON) {
-      return Object.keys(actions)[0];
+      var fallbackActionId = Object.keys(actions)[0];
+      return { actionId: fallbackActionId, profile: null };
     }
     return null;
   }
@@ -216,7 +250,9 @@ function resolveActiveActionId(mouseButton, e) {
     var sig = "key:" + heldKey + "|mods:" + modStr + "|btn:" + mouseButton;
     for (var i = 0; i < profiles.length; i++) {
       var p = profiles[i];
-      if (p?.trigger && triggerSigContent(p.trigger) === sig && settings.actions?.[p.actionId]) return p.actionId;
+      if (p?.trigger && triggerSigContent(p.trigger) === sig && settings.actions?.[p.actionId]) {
+        return { actionId: p.actionId, profile: p };
+      }
     }
   }
   // Match modifier-only profiles: Shift/Ctrl/Alt/Meta only active when set as part of a trigger.
@@ -224,7 +260,9 @@ function resolveActiveActionId(mouseButton, e) {
   var modSig = "mods:" + (+mods.shift) + (+mods.alt) + (+mods.ctrl) + (+mods.meta) + "|btn:" + mouseButton;
   for (var j = 0; j < profiles.length; j++) {
     var q = profiles[j];
-    if (q?.trigger && triggerSigContent(q.trigger) === modSig && settings.actions?.[q.actionId]) return q.actionId;
+    if (q?.trigger && triggerSigContent(q.trigger) === modSig && settings.actions?.[q.actionId]) {
+      return { actionId: q.actionId, profile: q };
+    }
   }
   return null;
 }
@@ -374,9 +412,10 @@ function clean_up() {
   smart_select = false;
   mouse_button = -1;
   key_pressed = 0;
+  activeProfileId = null;
 }
 
-function resolveKeyTriggeredActionId(mouseButton) {
+function resolveKeyTriggeredProfile(mouseButton) {
   if (!settings || !settings.profiles || !settings.actions) return null;
 
   var hk = (heldKey || "").trim().toLowerCase();
@@ -391,7 +430,7 @@ function resolveKeyTriggeredActionId(mouseButton) {
     if (!p || !p.trigger || p.trigger.kind !== "key") continue;
     if (triggerSigContent(p.trigger) !== sig) continue;
     if (typeof p.trigger.mouseButton === "number" && p.trigger.mouseButton !== mouseButton) continue;
-    if (p.actionId && settings.actions[p.actionId]) return p.actionId;
+    if (p.actionId && settings.actions[p.actionId]) return { actionId: p.actionId, profile: p };
   }
   return null;
 }
@@ -457,7 +496,9 @@ function mousedown(event) {
       var firstId = Object.keys(settings.actions)[0];
       // Only start selection if activation key is held (same rule as normal path).
       if (firstId && ev && heldKey && heldKey !== "") {
-        activeActionId = resolveActiveActionId(mouse_button, event) || firstId;
+        var resolvedColdProfile = resolveActiveProfile(mouse_button, event);
+        activeActionId = resolvedColdProfile ? resolvedColdProfile.actionId : firstId;
+        activeProfileId = resolvedColdProfile && resolvedColdProfile.profile ? resolvedColdProfile.profile.id : null;
         applyFilterFromSettings(activeActionId);
         if (os === OS_WIN) stop_menu = false;
         startSelectionFromEvent(ev);
@@ -466,18 +507,19 @@ function mousedown(event) {
     return;
   }
 
-  activeActionId = resolveActiveActionId(mouse_button, event);
+  var resolvedProfile = resolveActiveProfile(mouse_button, event);
+  var activeProfile = resolvedProfile ? resolvedProfile.profile : null;
+  activeActionId = resolvedProfile ? resolvedProfile.actionId : null;
+  activeProfileId = activeProfile ? activeProfile.id : null;
 
   // Key triggers require the key to be held; modifier-only profiles (Shift, Alt, etc.) do not.
-  if (activeActionId && settings && settings.profiles) {
-    var matchedProfile = settings.profiles.find(function (p) { return p.actionId === activeActionId; });
-    if (matchedProfile && matchedProfile.trigger && matchedProfile.trigger.kind === "key" && (!heldKey || heldKey === "")) {
-      activeActionId = null;
-    }
+  if (activeProfile && activeProfile.trigger && activeProfile.trigger.kind === "key" && (!heldKey || heldKey === "")) {
+    activeActionId = null;
+    activeProfileId = null;
   }
 
   if (settings && settings.debugMode && typeof console !== "undefined" && console.log) {
-    var profile = settings && settings.profiles ? settings.profiles.find(function (p) { return p.actionId === activeActionId; }) : null;
+    var profile = activeProfileId && settings && settings.profiles ? settings.profiles.find(function (p) { return p.id === activeProfileId; }) : null;
     console.log("LinkSlinger [QA] mousedown:", { heldKey: heldKey, eventKey: event.key, activeActionId: activeActionId, profileName: profile ? profile.name : null });
   }
 
@@ -494,10 +536,11 @@ function mousedown(event) {
       // If mouse is no longer down, abort.
       if (!mouseIsDown) return;
       // Only key trigger profiles
-      var keyActionId = resolveKeyTriggeredActionId(lateArmButton);
-      if (!keyActionId) return;
+      var keyProfile = resolveKeyTriggeredProfile(lateArmButton);
+      if (!keyProfile) return;
 
-      activeActionId = keyActionId;
+      activeActionId = keyProfile.actionId;
+      activeProfileId = keyProfile.profile ? keyProfile.profile.id : null;
       applyFilterFromSettings(activeActionId);
 
       // Replicate the minimal side effects from the normal path
@@ -843,7 +886,9 @@ function detech(x, y, open) {
     label = link_count + (link_count === 1 ? " link" : " links") + " (" + filtered_count + " filtered)";
   }
   if (activeActionId && settings?.profiles) {
-    var profile = settings.profiles.find(function (p) { return p.actionId === activeActionId; });
+    var profile = activeProfileId
+      ? settings.profiles.find(function (p) { return p.id === activeProfileId; })
+      : null;
     if (profile && profile.name) label += " — " + profile.name;
   }
   count_label.innerText = label;

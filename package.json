@@ -4,6 +4,8 @@
   "description": "Chrome extension for selecting multiple links via click-and-drag and performing bulk actions.",
   "private": true,
   "scripts": {
+    "build:safari": "node scripts/build-safari.js",
+    "test": "npm run test:e2e",
     "test:e2e": "node tests/e2e/extension.e2e.js"
   },
   "devDependencies": {

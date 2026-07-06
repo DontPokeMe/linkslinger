@@ -2,6 +2,12 @@
  * settings_manager.js (refactored for chrome.storage)
  ********************/
 
+try {
+  importScripts("browser-compat.js");
+} catch (error) {
+  // importScripts is unavailable outside the extension service worker.
+}
+
 const CURRENT_VERSION = "5";
 /** Schema version of the settings object; bump on migrations. */
 const SETTINGS_SCHEMA_VERSION = 1;
@@ -406,38 +412,52 @@ function openTab(urls, delay, windowId, openerTabId, tabPosition, closeTime) {
  * Service workers cannot access navigator.clipboard directly.
  * We use an offscreen document to provide DOM context for clipboard operations.
  */
-async function copyToClipboard(text) {
-  try {
-    // Check if offscreen document already exists
-    const clients = await chrome.offscreen.hasDocument();
-    
-    if (!clients) {
-      // Create offscreen document for clipboard operations
-      await chrome.offscreen.createDocument({
-        url: 'offscreen.html',
-        reasons: ['CLIPBOARD'],
-        justification: 'Copy links to clipboard for LinkSlinger extension'
-      });
-    }
-
-    // Send message to offscreen document to perform clipboard operation
-    const response = await chrome.runtime.sendMessage({
-      target: 'offscreen',
-      type: 'copy-to-clipboard',
-      text: text
-    });
-
-    if (!response || !response.success) {
-      console.error('LinkSlinger: Clipboard operation failed:', response?.error);
-    }
-  } catch (error) {
-    console.error('LinkSlinger: Failed to copy to clipboard:', error);
-    // Fallback: Try direct clipboard API (may work in some contexts)
+async function copyToClipboard(text, sender) {
+  if (chrome.offscreen && chrome.offscreen.hasDocument && chrome.offscreen.createDocument) {
     try {
-      await navigator.clipboard.writeText(text);
-    } catch (fallbackError) {
-      console.error('LinkSlinger: Fallback clipboard also failed:', fallbackError);
+      // Check if offscreen document already exists
+      const clients = await chrome.offscreen.hasDocument();
+
+      if (!clients) {
+        // Create offscreen document for clipboard operations
+        await chrome.offscreen.createDocument({
+          url: 'offscreen.html',
+          reasons: ['CLIPBOARD'],
+          justification: 'Copy links to clipboard for LinkSlinger extension'
+        });
+      }
+
+      // Send message to offscreen document to perform clipboard operation
+      const response = await chrome.runtime.sendMessage({
+        target: 'offscreen',
+        type: 'copy-to-clipboard',
+        text: text
+      });
+
+      if (response && response.success) return;
+      console.error('LinkSlinger: Clipboard operation failed:', response?.error);
+    } catch (error) {
+      console.error('LinkSlinger: Failed to copy to clipboard:', error);
     }
+  }
+
+  if (sender && sender.tab && sender.tab.id && chrome.tabs && chrome.tabs.sendMessage) {
+    try {
+      const response = await chrome.tabs.sendMessage(sender.tab.id, {
+        message: "copy-to-clipboard",
+        text
+      });
+      if (response && response.success) return;
+      console.error('LinkSlinger: Content-script clipboard operation failed:', response?.error);
+    } catch (error) {
+      console.error('LinkSlinger: Failed to ask content script to copy:', error);
+    }
+  }
+
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (fallbackError) {
+    console.error('LinkSlinger: Fallback clipboard also failed:', fallbackError);
   }
 }
 
@@ -509,6 +529,10 @@ async function ensureFolder(parentId, title) {
 }
 
 async function handleBookmarkAction(urls, folderName) {
+  if (!chrome.bookmarks || !chrome.bookmarks.getTree || !chrome.bookmarks.create) {
+    return { added: 0, skipped: 0, total: 0, unsupported: true };
+  }
+
   const raw = urls || [];
   const safe = raw
     .map((u) => ({
@@ -579,7 +603,7 @@ async function handleRequests(request, sender, sendResponse) {
           if (request.setting.options.copy === AS_LIST_LINK_HTML) {
             text = `<ul>\n${text}</ul>\n`;
           }
-          copyToClipboard(text);
+          await copyToClipboard(text, sender);
           break;
         }
         case "bm": {
