@@ -58,15 +58,37 @@ function startTestServer() {
   });
 }
 
+function stage(name) {
+  console.error(`[e2e] -> ${name}`);
+}
+
+function dumpTargets(browser, label) {
+  const rows = browser
+    .targets()
+    .map((t) => `    ${t.type()} ${t.url()}`)
+    .join("\n");
+  console.error(`[e2e] targets (${label}):\n${rows || "    <none>"}`);
+}
+
+const isBackgroundWorker = (target) =>
+  target.type() === "service_worker" && target.url().includes("background.js");
+
 async function getExtensionWorker(browser) {
-  const target = await browser.waitForTarget(
-    (target) =>
-      target.type() === "service_worker" &&
-      target.url().includes("background.js"),
-    { timeout: 30000 }
-  );
+  stage("waiting for extension service worker");
+  // The MV3 service worker can register lazily, so check what already exists
+  // before falling back to a bounded wait.
+  let target = browser.targets().find(isBackgroundWorker);
+  if (!target) {
+    try {
+      target = await browser.waitForTarget(isBackgroundWorker, { timeout: 30000 });
+    } catch (err) {
+      dumpTargets(browser, "service-worker timeout");
+      throw err;
+    }
+  }
   const worker = await target.worker();
   assert(worker, "Could not get extension service worker");
+  stage("service worker ready");
   return worker;
 }
 
@@ -206,10 +228,15 @@ async function testOpenTabs(browser, origin) {
   const page = await openFixturePage(browser, origin);
   const existingTargets = new Set(browser.targets());
   await dragSelect(page, "Shift");
-  await browser.waitForTarget(
-    (target) => !existingTargets.has(target) && target.url().includes("/alpha"),
-    { timeout: 30000 }
-  );
+  try {
+    await browser.waitForTarget(
+      (target) => !existingTargets.has(target) && target.url().includes("/alpha"),
+      { timeout: 30000 }
+    );
+  } catch (err) {
+    dumpTargets(browser, "shift open-tabs timeout");
+    throw err;
+  }
   const urls = browser.targets().map((target) => target.url());
   assert(urls.some((url) => url.includes("/alpha")), "Expected selected Alpha link to open in a tab");
   assert(!urls.some((url) => url.includes("/header-link")), "Sticky header link should not open");
@@ -220,10 +247,15 @@ async function testDefaultKeyOpenTabs(browser, origin) {
   const page = await openFixturePage(browser, origin);
   const existingTargets = new Set(browser.targets());
   await dragSelectWithKey(page, "z");
-  await browser.waitForTarget(
-    (target) => !existingTargets.has(target) && target.url().includes("/alpha"),
-    { timeout: 30000 }
-  );
+  try {
+    await browser.waitForTarget(
+      (target) => !existingTargets.has(target) && target.url().includes("/alpha"),
+      { timeout: 30000 }
+    );
+  } catch (err) {
+    dumpTargets(browser, "default-key open-tabs timeout");
+    throw err;
+  }
   const urls = browser.targets().map((target) => target.url());
   assert(urls.some((url) => url.includes("/alpha")), "Expected default Z-selected Alpha link to open in a tab");
   assert(!urls.some((url) => url.includes("/header-link")), "Sticky header link should not open for default key selection");
@@ -287,12 +319,17 @@ async function runE2E() {
 
     const worker = await getExtensionWorker(browser);
     await setExtensionSettings(worker);
+    stage("options page");
     await testOptionsPage(worker, browser);
     await setDefaultKeySettings(worker);
+    stage("default-key open tabs");
     await testDefaultKeyOpenTabs(browser, origin);
     await setExtensionSettings(worker);
+    stage("modifier open tabs");
     await testOpenTabs(browser, origin);
+    stage("copy");
     await testCopy(browser, origin);
+    stage("bookmarks");
     await testBookmarks(worker, browser, origin);
 
     const version = await worker.evaluate(() => chrome.runtime.getManifest().version);
