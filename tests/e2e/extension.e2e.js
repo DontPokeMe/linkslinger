@@ -320,6 +320,8 @@ async function runE2E() {
       // The DevTools pipe transport hangs with headed Chrome under xvfb, so use
       // the default WebSocket transport there and keep the pipe for headless.
       pipe: headless !== false,
+      // Surface the browser's stdout/stderr in CI so launch failures are visible.
+      dumpio: headless === false,
       ignoreDefaultArgs: ["--disable-extensions"],
     });
 
