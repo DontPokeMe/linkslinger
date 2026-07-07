@@ -48,7 +48,11 @@ jobs:
       - name: Install Chromium dependencies (Puppeteer on Linux)
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libasound2t64
+          sudo apt-get install -y xvfb dbus-x11 fonts-liberation \
+            libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libxkbcommon0 \
+            libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libasound2t64 \
+            libgtk-3-0 libglib2.0-0 libxshmfence1 libxrender1 libxext6 libxi6 \
+            libxtst6 libxss1 libpango-1.0-0 libcairo2 libnspr4
 
       - name: Run E2E tests
         # Extensions do not load in Chrome's headless mode on Linux, so run
