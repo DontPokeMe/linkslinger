@@ -303,12 +303,8 @@ async function runE2E() {
   const { server, origin } = await startTestServer();
   let browser;
   try {
-    // Chrome's new headless mode does not reliably load extensions on Linux,
-    // so CI runs headed under xvfb (PUPPETEER_HEADLESS=false). Other platforms
-    // keep new-headless, which loads extensions fine.
-    const headless = process.env.PUPPETEER_HEADLESS === "false" ? false : "new";
     browser = await puppeteer.launch({
-      headless,
+      headless: "new",
       args: [
         "--disable-gpu",
         "--disable-dev-shm-usage",
@@ -317,11 +313,7 @@ async function runE2E() {
         `--disable-extensions-except=${EXTENSION_PATH}`,
         `--load-extension=${EXTENSION_PATH}`,
       ],
-      // The DevTools pipe transport hangs with headed Chrome under xvfb, so use
-      // the default WebSocket transport there and keep the pipe for headless.
-      pipe: headless !== false,
-      // Surface the browser's stdout/stderr in CI so launch failures are visible.
-      dumpio: headless === false,
+      pipe: true,
       ignoreDefaultArgs: ["--disable-extensions"],
     });
 
