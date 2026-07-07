@@ -317,7 +317,9 @@ async function runE2E() {
         `--disable-extensions-except=${EXTENSION_PATH}`,
         `--load-extension=${EXTENSION_PATH}`,
       ],
-      pipe: true,
+      // The DevTools pipe transport hangs with headed Chrome under xvfb, so use
+      // the default WebSocket transport there and keep the pipe for headless.
+      pipe: headless !== false,
       ignoreDefaultArgs: ["--disable-extensions"],
     });
 
