@@ -1,0 +1,80 @@
+name: Blog Announcement
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to announce (e.g. 4.0.9)'
+        required: true
+      publish:
+        description: 'Publish live immediately (else committed as a Jekyll draft, published: false)'
+        type: boolean
+        default: false
+
+# The blog lives in a different repo, so pushing there needs a PAT
+# (BLOG_REPO_TOKEN) with Contents: write on DontPokeMe/dontpokeme-web.
+# GITHUB_TOKEN cannot write to another repository.
+env:
+  BLOG_REPO: DontPokeMe/dontpokeme-web
+  BLOG_POSTS_DIR: blog-repo/blog/_posts
+
+jobs:
+  announce:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout LinkSlinger
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Resolve version
+        id: ver
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Announcing version: $VERSION"
+
+      - name: Checkout blog repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.BLOG_REPO }}
+          token: ${{ secrets.BLOG_REPO_TOKEN }}
+          path: blog-repo
+
+      - name: Generate post
+        id: gen
+        run: |
+          PUBLISH_FLAG=""
+          if [ "${{ inputs.publish }}" = "true" ]; then PUBLISH_FLAG="--publish"; fi
+          POST_PATH="$(node scripts/changelog-to-post.js \
+            --version "${{ steps.ver.outputs.VERSION }}" \
+            --changelog CHANGELOG.md \
+            --out "${{ env.BLOG_POSTS_DIR }}" \
+            $PUBLISH_FLAG)"
+          echo "POST_PATH=$POST_PATH" >> "$GITHUB_OUTPUT"
+          echo "Wrote $POST_PATH"
+
+      - name: Commit and push to blog repo
+        working-directory: blog-repo
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add blog/_posts/
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          STATE="draft (published: false)"
+          if [ "${{ inputs.publish }}" = "true" ]; then STATE="live"; fi
+          git commit -m "Announce LinkSlinger ${{ steps.ver.outputs.VERSION }} ($STATE)"
+          git push
