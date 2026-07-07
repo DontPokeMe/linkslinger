@@ -107,7 +107,7 @@ function buildPost({ version, date, body, publish }) {
     "",
     "---",
     "",
-    `**Get it:** [Chrome Web Store](https://chromewebstore.google.com/) · ` +
+    `**Get it:** [Chrome Web Store](https://chromewebstore.google.com/detail/linkslinger/pnjblgjiiomcbkgngghcdmnicjblcapo) · ` +
       `[Release notes on GitHub](https://github.com/DontPokeMe/linkslinger/releases/tag/v${version})`,
     "",
   ].join("\n");
