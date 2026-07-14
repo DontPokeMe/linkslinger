@@ -11,6 +11,8 @@ released, so keep these headings in this exact shape.
 
 ## [Unreleased]
 
+## [4.0.10] - 2026-07-14
+
 ### Added
 - Popup and About page now link to a free exposure scan at dontpoke.me.
 
