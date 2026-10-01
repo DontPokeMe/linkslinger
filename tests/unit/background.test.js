@@ -109,3 +109,24 @@ test("dedupeByUrl keeps first occurrences in page order", () => {
 test("background.js does not patch Array.prototype", () => {
   assert.equal(get(bg, "typeof Array.prototype.unique"), "undefined");
 });
+
+test("tabs action opens in the sender tab's window, right after it, in page order", async () => {
+  const created = [];
+  const ctx = loadBackground({
+    tabs: {
+      create: (obj, cb) => { created.push(obj); if (cb) cb({ id: 100 + created.length }); },
+      get: (id, cb) => cb({ id, index: 2, windowId: 7 })
+    },
+    // Last-focused window differs from the sender's window.
+    windows: { getAll: (_o, cb) => cb([]), getCurrent: (cb) => cb({ id: 1 }) }
+  });
+  const setting = get(ctx, "settingsManager").initDefaults().actions["101"];
+  const urls = ["a", "b", "a"].map((u) => ({ url: "https://x.test/" + u, title: u }));
+  await get(ctx, "handleRequests")({ message: "activate", setting, urls }, { tab: { id: 5 } });
+  await new Promise((r) => setTimeout(r, 10)); // later tabs are opened via setTimeout(delay)
+  const opened = created.filter((c) => c.url.startsWith("https://x.test/")); // ignore first-run options tab
+  assert.deepEqual(plain(opened.map((c) => [c.windowId, c.index, c.openerTabId, c.url])), [
+    [7, 3, 5, "https://x.test/a"],
+    [7, 4, 5, "https://x.test/b"]
+  ]);
+});

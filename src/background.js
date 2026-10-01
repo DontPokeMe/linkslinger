@@ -633,21 +633,21 @@ async function handleRequests(request, sender, sendResponse) {
           });
           break;
         case "tabs":
+          // Open next to the tab the selection came from, in that tab's window
+          // (windows.getCurrent() in a service worker is the last-focused window).
           chrome.tabs.get(sender.tab.id, (tab) => {
-            chrome.windows.getCurrent((window) => {
-              let tab_index = null;
-              if (!request.setting.options.end) {
-                tab_index = tab.index + 1;
-              }
-              openTab(
-                request.urls,
-                request.setting.options.delay,
-                window.id,
-                tab.id,
-                tab_index,
-                request.setting.options.close
-              );
-            });
+            let tab_index = null;
+            if (!request.setting.options.end) {
+              tab_index = tab.index + 1;
+            }
+            openTab(
+              request.urls,
+              request.setting.options.delay,
+              tab.windowId,
+              tab.id,
+              tab_index,
+              request.setting.options.close
+            );
           });
           break;
         case "export":
