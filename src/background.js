@@ -406,20 +406,28 @@ function openTab(urls, delay, windowId, openerTabId, tabPosition, closeTime) {
  * Service workers cannot access navigator.clipboard directly.
  * We use an offscreen document to provide DOM context for clipboard operations.
  */
+let creatingOffscreen = null;
+
+// Create the offscreen document once; concurrent callers share the pending
+// createDocument() call (a second concurrent call would throw).
+async function ensureOffscreenDocument() {
+  if (await chrome.offscreen.hasDocument()) return;
+  if (!creatingOffscreen) {
+    creatingOffscreen = chrome.offscreen.createDocument({
+      url: 'offscreen.html',
+      reasons: ['CLIPBOARD'],
+      justification: 'Copy links to clipboard for LinkSlinger extension'
+    }).finally(() => {
+      creatingOffscreen = null;
+    });
+  }
+  await creatingOffscreen;
+}
+
 async function copyToClipboard(text, sender) {
   if (chrome.offscreen && chrome.offscreen.hasDocument && chrome.offscreen.createDocument) {
     try {
-      // Check if offscreen document already exists
-      const clients = await chrome.offscreen.hasDocument();
-
-      if (!clients) {
-        // Create offscreen document for clipboard operations
-        await chrome.offscreen.createDocument({
-          url: 'offscreen.html',
-          reasons: ['CLIPBOARD'],
-          justification: 'Copy links to clipboard for LinkSlinger extension'
-        });
-      }
+      await ensureOffscreenDocument();
 
       // Send message to offscreen document to perform clipboard operation
       const response = await chrome.runtime.sendMessage({

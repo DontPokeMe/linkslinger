@@ -147,3 +147,31 @@ test("formatLink escapes titles/urls for HTML and Markdown and keeps one link pe
   assert.equal(formatLink(link, 6), '[<b>R&D</b> \\[draft\\]](https://w.test/Foo_%28bar%29?a=1&b="2")\n');
   assert.equal(formatLink({ url: "https://a.test/", title: undefined }, 6), "[](https://a.test/)\n");
 });
+
+test("concurrent copies create the offscreen document once and both reach it", async () => {
+  let hasDoc = false;
+  let pending = false;
+  let creates = 0;
+  const sent = [];
+  const ctx = loadBackground({
+    offscreen: {
+      hasDocument: () => Promise.resolve(hasDoc),
+      createDocument: () => {
+        if (pending) return Promise.reject(new Error("Only a single offscreen document may be created."));
+        pending = true;
+        creates++;
+        return new Promise((r) => setTimeout(() => { hasDoc = true; pending = false; r(); }, 5));
+      }
+    },
+    runtime: {
+      lastError: undefined,
+      onMessage: { addListener: () => {} },
+      getURL: (p) => p,
+      sendMessage: (msg) => { sent.push(msg.text); return Promise.resolve({ success: true }); }
+    }
+  });
+  const copyToClipboard = get(ctx, "copyToClipboard");
+  await Promise.all([copyToClipboard("one"), copyToClipboard("two")]);
+  assert.equal(creates, 1);
+  assert.deepEqual(plain(sent.sort()), ["one", "two"]);
+});
