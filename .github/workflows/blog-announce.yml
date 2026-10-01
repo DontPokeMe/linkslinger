@@ -23,15 +23,15 @@ env:
 
 jobs:
   announce:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout LinkSlinger
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: "20"
+          node-version: "24"
 
       - name: Resolve version
         id: ver
@@ -45,7 +45,7 @@ jobs:
           echo "Announcing version: $VERSION"
 
       - name: Checkout blog repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: ${{ env.BLOG_REPO }}
           token: ${{ secrets.BLOG_REPO_TOKEN }}
