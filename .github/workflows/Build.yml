@@ -45,6 +45,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Run unit tests
+        run: npm run test:unit
+
       - name: Install Chromium dependencies (Puppeteer on Linux)
         run: |
           sudo apt-get update
