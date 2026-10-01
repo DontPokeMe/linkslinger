@@ -98,3 +98,14 @@ test("triggerSig (background) and triggerSigContent (content) stay in parity", (
     assert.equal(triggerSigContent(t), triggerSig(t), JSON.stringify(t));
   }
 });
+
+test("dedupeByUrl keeps first occurrences in page order", () => {
+  const dedupeByUrl = get(bg, "dedupeByUrl");
+  const urls = ["a", "b", "a", "c", "b"].map((url) => ({ url, title: url }));
+  assert.deepEqual(plain(dedupeByUrl(urls).map((l) => l.url)), ["a", "b", "c"]);
+  assert.deepEqual(plain(dedupeByUrl([])), []);
+});
+
+test("background.js does not patch Array.prototype", () => {
+  assert.equal(get(bg, "typeof Array.prototype.unique"), "undefined");
+});

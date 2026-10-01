@@ -357,24 +357,18 @@ class SettingsManager {
 var settingsManager = new SettingsManager();
 
 /**
- * Utility: ensure list of URL objects is unique
- *   [
- *     { url: "...", title: "..." },
- *     { url: "...", title: "..." }
- *   ]
+ * Utility: drop duplicate URLs, keeping the first occurrence so the
+ * result still follows page order.
+ *   [{ url: "a" }, { url: "b" }, { url: "a" }] -> [{ url: "a" }, { url: "b" }]
  */
-Array.prototype.unique = function() {
-  const uniqueArray = [];
-  for (let i = 0; i < this.length; i++) {
-    for (let j = i + 1; j < this.length; j++) {
-      if (this[i].url === this[j].url) {
-        j = ++i;
-      }
-    }
-    uniqueArray.push(this[i]);
-  }
-  return uniqueArray;
-};
+function dedupeByUrl(links) {
+  const seen = new Set();
+  return links.filter((link) => {
+    if (seen.has(link.url)) return false;
+    seen.add(link.url);
+    return true;
+  });
+}
 
 function openTab(urls, delay, windowId, openerTabId, tabPosition, closeTime) {
   const obj = {
@@ -585,7 +579,7 @@ async function handleRequests(request, sender, sendResponse) {
   switch (request.message) {
     case "activate":
       if (request.setting.options.block) {
-        request.urls = request.urls.unique();
+        request.urls = dedupeByUrl(request.urls);
       }
       if (request.urls.length === 0) {
         return;
