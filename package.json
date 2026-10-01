@@ -5,7 +5,8 @@
   "private": true,
   "scripts": {
     "build:safari": "node scripts/build-safari.js",
-    "test": "npm run test:e2e",
+    "test": "npm run test:unit && npm run test:e2e",
+    "test:unit": "node --test tests/unit/*.test.js",
     "test:e2e": "node tests/e2e/extension.e2e.js",
     "version": "node scripts/prepare-release.js && git add src/manifest.json CHANGELOG.md",
     "postversion": "git push --follow-tags"
