@@ -35,6 +35,7 @@ var isFilterBroken = false;
 var scroll_bug_ignore = false;
 var os = ((navigator.appVersion.indexOf("Win") === -1) ? OS_LINUX : OS_WIN);
 var timer = 0;
+var siteBlocked = false;
 
 // Late-arm support (key trigger only)
 var mouseIsDown = false;
@@ -80,19 +81,10 @@ chrome.runtime.sendMessage({ message: "init" }, function(response) {
   settings = response;
   applySelectionColorFromSettings();
   applyFilterFromSettings();
+  applyBlockedFromSettings();
 
-  var allowed = true;
-  if (settings.blocked && Array.isArray(settings.blocked)) {
-    for (var i in settings.blocked) {
-      if (settings.blocked[i] === "") continue;
-      try {
-        var re = new RegExp(settings.blocked[i], "i");
-        if (re.test(window.location.href)) { allowed = false; break; }
-      } catch (e) { /* skip invalid regex */ }
-    }
-  }
-  if (allowed && settings.actions && settings.debugMode && typeof console !== "undefined" && console.log) {
-    console.log("LinkSlinger: Settings loaded");
+  if (settings.actions && settings.debugMode && typeof console !== "undefined" && console.log) {
+    console.log(siteBlocked ? "LinkSlinger: Site is blocked in settings" : "LinkSlinger: Settings loaded");
   }
 });
 
@@ -102,6 +94,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, callback) {
     settings = request.settings;
     applySelectionColorFromSettings();
     applyFilterFromSettings();
+    applyBlockedFromSettings();
     if (box) {
       box.style.setProperty("--ls-box-color", currentSelectionColor);
       if (count_label) count_label.style.setProperty("--ls-box-color", currentSelectionColor);
@@ -142,6 +135,29 @@ function copyTextFromContentScript(text) {
 }
 
 var DEFAULT_SELECTION_COLOR = "#3b82f6";
+
+/**
+ * True if url matches any blocked-site pattern (case-insensitive regex).
+ * Empty and invalid patterns are ignored.
+ */
+function isUrlBlocked(url, blocked) {
+  if (!Array.isArray(blocked)) return false;
+  for (var i = 0; i < blocked.length; i++) {
+    if (typeof blocked[i] !== "string" || blocked[i] === "") continue;
+    try {
+      if (new RegExp(blocked[i], "i").test(url)) return true;
+    } catch (e) { /* skip invalid regex */ }
+  }
+  return false;
+}
+
+function applyBlockedFromSettings() {
+  siteBlocked = isUrlBlocked(window.location.href, settings && settings.blocked);
+  if (siteBlocked) {
+    heldKey = "";
+    stop_menu = false;
+  }
+}
 
 function normalizeHexColor(value) {
   if (typeof value !== "string" || !value) return DEFAULT_SELECTION_COLOR;
@@ -472,6 +488,7 @@ function startSelectionFromEvent(event) {
 }
 
 function mousedown(event) {
+  if (siteBlocked) return;
   mouse_button = event.button;
   mouseIsDown = true;
   lateArmButton = mouse_button;
@@ -493,6 +510,8 @@ function mousedown(event) {
       settings = r;
       applySelectionColorFromSettings();
       applyFilterFromSettings();
+      applyBlockedFromSettings();
+      if (siteBlocked) return;
       var firstId = Object.keys(settings.actions)[0];
       // Only start selection if activation key is held (same rule as normal path).
       if (firstId && ev && heldKey && heldKey !== "") {
@@ -914,6 +933,7 @@ function allow_key(keyCode) {
 }
 
 function keydown(event) {
+  if (siteBlocked) return;
   // CRITICAL: Don't activate when typing in input fields (per Midori's guide Section 2.3)
   var target = event.target;
   var isInputField = target.tagName === 'INPUT' || 
@@ -980,7 +1000,7 @@ function allow_selection() {
 }
 
 function contextmenu(event) {
-  if (stop_menu) {
+  if (stop_menu && !siteBlocked) {
     event.preventDefault();
   }
 }
