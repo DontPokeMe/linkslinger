@@ -20,6 +20,7 @@ node_modules/
 build/
 release/
 dist/
+video/out/
 *.zip
 *.crx
 *.pem
