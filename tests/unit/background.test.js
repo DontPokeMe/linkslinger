@@ -130,3 +130,20 @@ test("tabs action opens in the sender tab's window, right after it, in page orde
     [7, 4, 5, "https://x.test/b"]
   ]);
 });
+
+test("formatLink escapes titles/urls for HTML and Markdown and keeps one link per line", () => {
+  const formatLink = get(bg, "formatLink");
+  const link = { url: 'https://w.test/Foo_(bar)?a=1&b="2"', title: "  <b>R&D</b>\n\t[draft]  " };
+  assert.equal(formatLink(link, 0), '<b>R&D</b> [draft]\thttps://w.test/Foo_(bar)?a=1&b="2"\n');
+  assert.equal(formatLink(link, 3), "<b>R&D</b> [draft]\n");
+  assert.equal(
+    formatLink(link, 4),
+    '<a href="https://w.test/Foo_(bar)?a=1&amp;b=&quot;2&quot;">&lt;b&gt;R&amp;D&lt;/b&gt; [draft]</a>\n'
+  );
+  assert.equal(
+    formatLink(link, 5),
+    '<li><a href="https://w.test/Foo_(bar)?a=1&amp;b=&quot;2&quot;">&lt;b&gt;R&amp;D&lt;/b&gt; [draft]</a></li>\n'
+  );
+  assert.equal(formatLink(link, 6), '[<b>R&D</b> \\[draft\\]](https://w.test/Foo_%28bar%29?a=1&b="2")\n');
+  assert.equal(formatLink({ url: "https://a.test/", title: undefined }, 6), "[](https://a.test/)\n");
+});

@@ -482,7 +482,25 @@ const AS_LINK_HTML = 4;
 const AS_LIST_LINK_HTML = 5;
 const AS_MARKDOWN = 6;
 
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function escapeMarkdownText(str) {
+  return String(str).replace(/([\\\[\]])/g, "\\$1");
+}
+
+function escapeMarkdownUrl(str) {
+  return String(str).replace(/\(/g, "%28").replace(/\)/g, "%29").replace(/ /g, "%20");
+}
+
 function formatLink({ url, title }, copyFormat) {
+  // innerText can contain tabs/newlines (multi-line anchors); keep one link per line.
+  title = String(title == null ? "" : title).replace(/\s+/g, " ").trim();
   switch (parseInt(copyFormat, 10)) {
     case URLS_WITH_TITLES:
       return title + "\t" + url + "\n";
@@ -493,11 +511,11 @@ function formatLink({ url, title }, copyFormat) {
     case TITLES_ONLY:
       return title + "\n";
     case AS_LINK_HTML:
-      return `<a href="${url}">${title}</a>\n`;
+      return `<a href="${escapeHtml(url)}">${escapeHtml(title)}</a>\n`;
     case AS_LIST_LINK_HTML:
-      return `<li><a href="${url}">${title}</a></li>\n`;
+      return `<li><a href="${escapeHtml(url)}">${escapeHtml(title)}</a></li>\n`;
     case AS_MARKDOWN:
-      return `[${title}](${url})\n`;
+      return `[${escapeMarkdownText(title)}](${escapeMarkdownUrl(url)})\n`;
   }
 }
 
