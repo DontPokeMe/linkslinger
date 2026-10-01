@@ -9,6 +9,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm install
 ```
 
+**Run unit tests (no browser, ~1s):**
+```bash
+npm run test:unit
+```
+`tests/unit/helpers.js` loads `src/background.js` / `src/content.js` into a
+`node:vm` sandbox with minimal chrome/DOM stubs. `npm test` runs unit then E2E.
+
 **Run E2E tests (Puppeteer):**
 ```bash
 npm run test:e2e
