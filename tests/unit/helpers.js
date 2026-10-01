@@ -59,9 +59,12 @@ function loadContent({ href = "https://example.com/", chromeOverrides } = {}) {
   const windowObj = { ...target("window"), location: { href }, pageXOffset: 0, pageYOffset: 0 };
   const documentObj = {
     ...target("document"),
-    documentElement: { scrollLeft: 0, scrollTop: 0 },
+    documentElement: { scrollLeft: 0, scrollTop: 0, appendChild: noop, removeChild: noop },
     body: { appendChild: noop, removeChild: noop },
-    createElement: () => ({ style: { setProperty: noop }, appendChild: noop })
+    createElement: () => ({
+      style: { setProperty: noop }, appendChild: noop, remove: noop, setAttribute: noop,
+      classList: { add: noop, remove: noop, toggle: noop, contains: () => false }
+    })
   };
   const context = vm.createContext({
     chrome: makeChromeStub(chromeOverrides),
